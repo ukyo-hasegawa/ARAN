@@ -7,21 +7,6 @@
 #include <cstring>
 #include <map>
 
-// パケット構造
-struct RDP {
-    std::string source_ip;
-    std::string dest_ip;
-    std::string signature; // 署名
-    std::vector<std::string> intermediate_nodes; // 中間ノード
-};
-
-struct REP {
-    std::string source_ip;
-    std::string dest_ip;
-    std::string signature; // 署名
-    std::vector<std::string> reverse_path; // 逆経路
-};
-
 // RSA鍵管理
 class RSAKeyManager {
 public:

@@ -3,7 +3,10 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include "data_struct.h"
 
+
+//中間ノードの動作
 void intermediaryNode(const std::string& dest_ip, const std::string& next_hop_ip) {
     RSA* intermediaryKey = RSAKeyManager::generateKeyPair();
 
