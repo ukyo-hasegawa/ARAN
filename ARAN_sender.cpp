@@ -1,44 +1,47 @@
-#include "RSA/RSA.h"
-#include <sys/socket.h>
-#include <netdb.h>
-#include <arpa/inet.h>
-#include <unistd.h>
-#include "data_struct.h"
+#include <string>
+#include <iostream>
+#include <random>
+#include <chrono>
+#include <ctime>
+#include <iomanip>
 
-//送信ノードの動作
-void senderNode(const std::string& dest_ip,const std::string& broadcast_ip,const std::string& cert_A) {
-    EVP_PKEY* senderKey = RSAKeyManager::generateKeyPair();
+
+struct RDP
+{
+    std::string type; //識別子
+    std::string dest_ip; //宛先IPアドレス
+    std::string cert; //証明書
+    std::int32_t n; //ランダムな値
+    std::string t; //現在時刻
+};
+
+
+int main() {
+
+    std::random_device rnd;
+
+    //現在時刻の取得
+    auto now = std::chrono::system_clock::now();
+
+    //時刻をtime_tに変換
+    std::time_t currentTime = std::chrono::system_clock::to_time_t(now);
+
+
+    // ローカル時刻にフォーマット
+    std::tm* localTime = std::localtime(&currentTime);
+
+    // 文字列にフォーマット
+    std::ostringstream timeStream;
+    timeStream << std::put_time(localTime, "%Y-%m-%d %H:%M:%S");
+    std::string formattedTime = timeStream.str();
     
-    // ソケット作成
-    int sock = socket(AF_INET, SOCK_DGRAM, 0);
-    if (sock < 0) {
-        perror("Socket creation failed");
-        return;
-    }
+    //RDPを生成するコード
+    RDP test_rdp1 = {"RDP","10.0.0.1","certification",rnd(),formattedTime}; //テスト用のため適当に設定
+    std::string IP = "10.0.0.1"; //sta1のIPアドレス
+    std::cout << "IP=" << IP << std::endl;
 
-    //ブロードキャストアドレスの設定
-    int broadcastEnable = 1;
-    setsockopt(sock,SOL_SOCKET,SO_BROADCAST,&broadcastEnable,sizeof(broadcastEnable));
-
-    sockaddr_in broadcastAddr{};
-    broadcastAddr.sin_family = AF_INET;
-    broadcastAddr.sin_port = htons(5000);
-    inet_pton(AF_INET,broadcast_ip.c_str(),&broadcastAddr.sin_addr);
-
-    // RDPメッセージ生成
-    std::string rdpMessage = createRDPMessage("10.0.0.1", dest_ip, cert_A, senderKey);
-
-    // メッセージのブロードキャスト
-    ssize_t sentBytes = sendto(sock, rdpMessage.c_str(), rdpMessage.size(), 0,
-                               (sockaddr*)&broadcastAddr, sizeof(broadcastAddr));
-
-    if (sentBytes < 0) {
-        perror("Failed to broadcast RDP");
-    } else {
-        std::cout << "Broadcasted RDP: " << rdpMessage << std::endl;
-    }
-
-    close(sock);
-    EVP_PKEY_free(senderKey);
 }
 
+
+
+//ブロードキャストするコード
