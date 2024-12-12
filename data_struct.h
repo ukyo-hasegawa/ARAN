@@ -5,7 +5,7 @@
 #include "RSA/RSA.h"
 
 // RSA署名ヘルパー関数
-std::string signData(const std::string& data, RSA* privateKey) {
+std::string signData(const std::string& data, EVP_PKEY* privateKey) {
     return RSAKeyManager::signMessage(data, privateKey);
 }
 
@@ -17,7 +17,7 @@ struct REP {
 };
 
 // RDPメッセージ生成関数
-std::string createRDPMessage(const std::string& source_ip, const std::string& dest_ip, const std::string& cert_A, RSA* privateKey) {
+std::string createRDPMessage(const std::string& source_ip, const std::string& dest_ip, const std::string& cert_A, EVP_PKEY* privateKey) {
     std::ostringstream messageStream;
 
     // ランダム値生成

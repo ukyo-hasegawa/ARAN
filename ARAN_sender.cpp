@@ -7,7 +7,7 @@
 
 //送信ノードの動作
 void senderNode(const std::string& dest_ip,const std::string& broadcast_ip,const std::string& cert_A) {
-    RSA* senderKey = RSAKeyManager::generateKeyPair();
+    EVP_PKEY* senderKey = RSAKeyManager::generateKeyPair();
     
     // ソケット作成
     int sock = socket(AF_INET, SOCK_DGRAM, 0);
@@ -15,7 +15,6 @@ void senderNode(const std::string& dest_ip,const std::string& broadcast_ip,const
         perror("Socket creation failed");
         return;
     }
-
 
     //ブロードキャストアドレスの設定
     int broadcastEnable = 1;
@@ -40,6 +39,6 @@ void senderNode(const std::string& dest_ip,const std::string& broadcast_ip,const
     }
 
     close(sock);
-    RSA_free(senderKey);
+    EVP_PKEY_free(senderKey);
 }
 
