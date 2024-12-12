@@ -41,9 +41,38 @@ int main() {
     
     //RDPを生成するコード
     RDP test_rdp1 = {"RDP","10.0.0.1","certification",rnd(),formattedTime}; //テスト用のため適当に設定
+
+    //シリアライズ
+    std::vector<uint8_t> buf;
+    auto serialize_string = [&buf](const std::string& str) {
+        std::uint32_t len =str.size();
+        buf.push_back((len >> 0) & 0xFF);
+        buf.push_back((len >> 8) & 0xFF);
+        buf.push_back((len >> 16) & 0xFF);
+        buf.push_back((len >> 24) & 0xFF);
+        buf.insert(buf.end(), str.begin(), str.end());
+    };
+    
+    serialize_string(test_rdp1.type);
+    serialize_string(test_rdp1.dest_ip);
+    serialize_string(test_rdp1.cert);
+
+    // n (整数) シリアライズ
+    for (int i = 0; i < 4; i++) {
+        buf.push_back((test_rdp1.n >> (8 * i)) & 0xFF);
+    }
+
+    // t (現在時刻) シリアライズ
+    serialize_string(test_rdp1.t);
+
+    // シリアライズされたデータを表示 (16進数表示)
+    std::cout << "Serialized data (hex): ";
+    for (uint8_t byte : buf) {
+        printf("%02x ", byte);
+    }
+    std::cout << std::endl;
     
     //ブロードキャストするコード
-
     //ソケットの作成
     int sock;
     struct sockaddr_in addr;
