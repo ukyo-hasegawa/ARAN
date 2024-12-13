@@ -145,16 +145,6 @@ int main() {
         std::cerr << "Error during deserialization: " << e.what() << std::endl;
     }
 
-
-
-
-
-    
-
-
-
-
-
     /*
     //ブロードキャストするコード
     //ソケットの作成
