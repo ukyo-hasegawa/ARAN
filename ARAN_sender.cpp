@@ -84,7 +84,7 @@ int main() {
     }
     std::cout << std::endl;
 
-
+    /*
     //デシリアライズするコード
     try {
         RDP deserialized_rdp;
@@ -149,6 +149,7 @@ int main() {
     } catch (const std::exception& e) {
         std::cerr << "Error during deserialization: " << e.what() << std::endl;
     }
+    */
 
     
     //ブロードキャストするコード
@@ -174,14 +175,12 @@ int main() {
         return 1;
     }
 
-    if (sendto(sock, "HELLO", 5, 0, reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr)) < 0) {
+    if (sendto(sock, buf.data(), buf.size(), 0, reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr)) < 0) {
         std::cerr << "Failed to send message" << std::endl;
         close(sock);
         return 1;
     }
 
     close(sock);
-    
-    
 
 }
