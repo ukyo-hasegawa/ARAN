@@ -23,6 +23,9 @@ struct RDP
 
 int main() {
 
+    //証明書の取得を行う
+    
+
     std::random_device rnd;
 
     //現在時刻の取得
