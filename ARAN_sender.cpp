@@ -43,6 +43,12 @@ int main() {
     //RDPを生成するコード
     RDP test_rdp1 = {"RDP","10.0.0.1","certification",rnd(),formattedTime}; //テスト用のため適当に設定
 
+    std::cout << "before test_rdp1.type :" << test_rdp1.type << std::endl;
+    std::cout << "before test_rdp1.dest_ip :" << test_rdp1.dest_ip << std::endl; 
+    std::cout << "before test_rdp1.cert :" << test_rdp1.cert << std::endl;
+    std::cout << "before test_rdp1.n :" << test_rdp1.n << std::endl;
+    std::cout << "before test_rdp1.t :" << test_rdp1.t << std::endl;
+
     //シリアライズ
     std::vector<uint8_t> buf;
     auto serialize_string = [&buf](const std::string& str) {
@@ -72,7 +78,7 @@ int main() {
         printf("%02x ", byte);
     }
     std::cout << std::endl;
-    
+    /*
     //ブロードキャストするコード
     //ソケットの作成
     int sock;
@@ -103,6 +109,7 @@ int main() {
     }
 
     close(sock);
+    */
     
 
 }
