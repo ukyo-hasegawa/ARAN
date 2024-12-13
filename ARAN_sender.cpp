@@ -8,6 +8,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include <stdint.h>
 
 
 struct RDP
@@ -15,7 +16,7 @@ struct RDP
     std::string type; //識別子
     std::string dest_ip; //宛先IPアドレス
     std::string cert; //証明書
-    std::int32_t n; //ランダムな値
+    std::uint32_t n; //ランダムな値
     std::string t; //現在時刻
 };
 
@@ -102,5 +103,6 @@ int main() {
     }
 
     close(sock);
+    
 
 }
