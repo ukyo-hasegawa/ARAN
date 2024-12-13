@@ -24,14 +24,7 @@ int main(){
 
     std::cout << "%s" << buf << std::endl;
 
-    return 0;
-
-
-
-   
-    
-
-
-
 //証明書を検証するコード
+
+    return 0;
 }
