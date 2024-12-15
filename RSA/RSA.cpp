@@ -9,6 +9,8 @@ int main() {
     if (!KeyCtx) {
         std::cerr << "Failed to initialize KeyCtx" << std::endl;
         return 1;
+    } else {
+        std::cout << "KeyCtx initialize success" << std::endl;
     }
 
     //鍵生成の準備、KeyCtxに関連する設定を有効にする。
@@ -16,13 +18,17 @@ int main() {
         std::cerr << "Failed to initialize Keygen" << std::endl;
         EVP_PKEY_CTX_free(KeyCtx);
         return 1;
-    };
+    } else {
+        std::cout << "Keygen initialize success" << std::endl;
+    }
 
     //4096byteの鍵長を指定
     if (EVP_PKEY_CTX_set_rsa_keygen_bits(KeyCtx, 4096) <= 0) {
         std::cerr << "Failed to set keygen bits" << std::endl;
         EVP_PKEY_CTX_free(KeyCtx);
         return 1;
+    } else {
+        std::cout << "Keygen_bits set up success" << std::endl;
     }
 
     //鍵構造をNULLで初期化
@@ -33,7 +39,7 @@ int main() {
     //以下、秘密鍵生成のコード
     BIO *privateBIO = BIO_new(BIO_s_mem());
 
-    PEM_write_bio_PrivateKey(privateBIO, key, NULL, NULL, 0, 0, NULL);
+    PEM_write_bio_PrivateKey(privateBIO, key, NULL, NULL, 0, 0, NULL); //ここでセグメンテーションフォルトが発生しているらしい
 
     int privatekeyLen = BIO_pending(privateBIO);
 
@@ -67,13 +73,13 @@ int main() {
 
     BIO *rsaPublicBIO = BIO_new_mem_buf(rsaPublicKeyChar, -1);
 
-    RSA *rsaPublicKey = NULL;
-    PEM_read_bio_RSA_PUBKEY(rsaPublicBIO, &rsaPublicKey, NULL, NULL);
+    EVP_PKEY *rsaPublicKey = NULL;
+    PEM_read_bio_PUBKEY(rsaPublicBIO, &rsaPublicKey, NULL, NULL);
 
     EVP_PKEY *publicKey = EVP_PKEY_new();
     EVP_PKEY_assign_RSA(publicKey, rsaPublicKey);
 
-    EVP_CIPHER_CTX *rsaEncryptCtx = (EVP_CIPHER_CTX *) malloc(sizeof(EVP_CIPHER_CTX));
+    EVP_CIPHER_CTX *rsaEncryptCtx = EVP_CIPHER_CTX_new();
     EVP_CIPHER_CTX_init(rsaEncryptCtx);
 
     unsigned char *ek = (unsigned char *) malloc(EVP_PKEY_size(publicKey));
@@ -104,13 +110,13 @@ int main() {
 
     BIO *RSAPrivateBIO = BIO_new_mem_buf(rsaPublicKeyChar, -1);
 
-    RSA *rsaPrivateKey = NULL;
-    PEM_read_bio_RSAPrivateKey(RSAPrivateBIO, &rsaPrivateKey, NULL, NULL);
+    EVP_PKEY *rsaPrivateKey = NULL;
+    PEM_read_bio_PrivateKey(RSAPrivateBIO, &rsaPrivateKey, NULL, NULL);
 
     EVP_PKEY *privateKey = EVP_PKEY_new();
     EVP_PKEY_assign_RSA(privateKey, rsaPrivateKey);
 
-    EVP_CIPHER_CTX *rsaDecryptCtx = (EVP_CIPHER_CTX *) malloc(sizeof(EVP_CIPHER_CTX));
+    EVP_CIPHER_CTX *rsaDecryptCtx = EVP_CIPHER_CTX_new();
     EVP_CIPHER_CTX_init(rsaDecryptCtx);
 
     EVP_OpenInit(rsaDecryptCtx, EVP_aes_256_cbc(), ek, ekLen, iv, privateKey);
