@@ -61,7 +61,7 @@ int main() {
     BIO_read(publicBIO, publicKeyChar, publickeyLen);
 
     // publicKeyChar(公開鍵) の内容を出力
-    std::cout << "Private Key:\n" << publicKeyChar << std::endl;
+    std::cout << "Public Key:\n" << publicKeyChar << std::endl;
 
     unsigned char *rsaPublicKeyChar = publicKeyChar;
 
@@ -70,25 +70,44 @@ int main() {
     RSA *rsaPublicKey = NULL;
     PEM_read_bio_RSA_PUBKEY(rsaPublicBIO, &rsaPublicKey, NULL, NULL);
 
+    EVP_PKEY *publicKey = EVP_PKEY_new();
+    EVP_PKEY_assign_RSA(publicKey, rsaPublicKey);
 
+    EVP_CIPHER_CTX *rsaEncryptCtx = (EVP_CIPHER_CTX *) malloc(sizeof(EVP_CIPHER_CTX));
+    EVP_CIPHER_CTX_init(rsaEncryptCtx);
 
+    unsigned char *ek = (unsigned char *) malloc(EVP_PKEY_size(publicKey));
+    int ekLen = 0;
+    //ivのメモリを動的に確保
+    unsigned char *iv = (unsigned char *) malloc(EVP_MAX_IV_LENGTH);
 
-
-
-
-
-
-
-
-
-
-
-
-
+    EVP_SealInit(rsaEncryptCtx, EVP_aes_256_cbc(), &ek, &ekLen, iv, &publicKey, 1);
     
+    std::string message = "test_message";
 
-    
+    const unsigned char* messageChar = (const unsigned char*) message.c_str();
 
+    int messagegLen = message.size()+1;
+
+    unsigned char *encryptedMessage = (unsigned char *) malloc(messagegLen + EVP_MAX_IV_LENGTH);
+
+    int encryptedMessageLen = 0;
+    int encryptedBlockLen = 0;
+
+    EVP_SealUpdate(rsaEncrypteCtx, encryptedMessage, &encryptedBlockLen, messageChar, messagegLen);
+    encryptedMessageLen = encryptedBlockLen;
+
+    EVP_SealFinal(rsaEncryptCtx, encryptedMessage+encryptedBlockLen, &encryptedBlockLen);
+    encryptedMessageLen += encryptedBlockLen;
+
+    unsigned char *RSAPrivateKeyChar = privateKeyChar;
+
+    BIO *RSAPrivateBIO = BIO_new_mem_buf(rsaPublicKeyChar, -1);
+
+    RSA *rsaPrivateKey = NULL;
+    PEM_read_bio_RSAPrivateKey(RSAPrivateBIO, &rsaPrivateKey, NULL, NULL);
+
+    EVP_PKEY *privateKey = NULL; 
 
 
 
