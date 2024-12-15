@@ -1,5 +1,6 @@
 #include <openssl/evp.h>
 #include <openssl/pem.h>
+#include <iostream>
 
 int main() {
     //RSA鍵ペア生成用のコンテキストを初期化、RSA鍵を指定。
@@ -25,6 +26,9 @@ int main() {
 
     BIO_read(privateBIO, privateKeyChar, privatekeyLen);
     //この時点で秘密鍵を保存可能
+
+    // privateKeyChar の内容を出力
+    std::cout << "Private Key:\n" << privateKeyChar << std::endl;
 
 
 
