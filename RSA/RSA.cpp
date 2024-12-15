@@ -94,21 +94,39 @@ int main() {
     int encryptedMessageLen = 0;
     int encryptedBlockLen = 0;
 
-    EVP_SealUpdate(rsaEncrypteCtx, encryptedMessage, &encryptedBlockLen, messageChar, messagegLen);
+    EVP_SealUpdate(rsaEncryptCtx, encryptedMessage, &encryptedBlockLen, messageChar, messagegLen);
     encryptedMessageLen = encryptedBlockLen;
 
     EVP_SealFinal(rsaEncryptCtx, encryptedMessage+encryptedBlockLen, &encryptedBlockLen);
     encryptedMessageLen += encryptedBlockLen;
 
-    unsigned char *RSAPrivateKeyChar = privateKeyChar;
+    unsigned char *rsaPrivateKeyChar = privateKeyChar;
 
     BIO *RSAPrivateBIO = BIO_new_mem_buf(rsaPublicKeyChar, -1);
 
     RSA *rsaPrivateKey = NULL;
     PEM_read_bio_RSAPrivateKey(RSAPrivateBIO, &rsaPrivateKey, NULL, NULL);
 
-    EVP_PKEY *privateKey = NULL; 
+    EVP_PKEY *privateKey = EVP_PKEY_new();
+    EVP_PKEY_assign_RSA(privateKey, rsaPrivateKey);
 
+    EVP_CIPHER_CTX *rsaDecryptCtx = (EVP_CIPHER_CTX *) malloc(sizeof(EVP_CIPHER_CTX));
+    EVP_CIPHER_CTX_init(rsaDecryptCtx);
 
+    EVP_OpenInit(rsaDecryptCtx, EVP_aes_256_cbc(), ek, ekLen, iv, privateKey);
+
+    unsigned char *decryptedMessage = (unsigned char *) malloc(encryptedMessageLen + EVP_MAX_IV_LENGTH);
+
+    int decryptedMessageLen = 0;
+    int decryptedBlockLen = 0;
+
+    EVP_OpenUpdate(rsaDecryptCtx, decryptedMessage, &decryptedBlockLen, encryptedMessage, decryptedMessageLen);
+    decryptedBlockLen = decryptedBlockLen;
+
+    EVP_OpenFinal(rsaDecryptCtx, decryptedMessage + decryptedBlockLen, &decryptedBlockLen);
+    decryptedMessageLen += decryptedBlockLen;
+
+    std::cout << "Encryptmessage:" << encryptedMessage << std::endl;
+    std::cout << "Decryptmessage:" << decryptedMessage << std::endl; 
 
 }
