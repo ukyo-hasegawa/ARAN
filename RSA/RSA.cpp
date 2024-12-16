@@ -96,7 +96,7 @@ int main() {
     BIO_free(rsaPublicBIO);
 
     //EVP_PKEY *publicKey = EVP_PKEY_new();
-    EVP_PKEY_assign_RSA(publicKey, rsaPublicKey);
+    //EVP_PKEY_assign_RSA(publicKey, rsaPublicKey);
 
     EVP_CIPHER_CTX *rsaEncryptCtx = EVP_CIPHER_CTX_new();
     EVP_CIPHER_CTX_init(rsaEncryptCtx);
