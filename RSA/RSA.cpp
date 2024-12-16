@@ -180,6 +180,9 @@ bool verifySignature(EVP_PKEY* publicKey, const std::string& message, const std:
     return false;
 }
 
+
+/*
+署名生成及び検証用main関数
 int main() {
     // キーペア生成
     EVP_PKEY* pkey = createRSAKeyPair();
@@ -217,3 +220,4 @@ int main() {
 
     return 0;
 }
+*/
