@@ -33,14 +33,22 @@ int main() {
 
     //鍵構造をNULLで初期化
     EVP_PKEY *key = NULL;
+
+    if (EVP_PKEY_keygen(KeyCtx, &key) <= 0) {
+        std::cerr << "Failed to generate RSA key" << std::endl;
+        EVP_PKEY_CTX_free(KeyCtx);
+        return 1;
+    } else {
+        std::cout << "Generate RSA key success" << std::endl;
+    }
+
     //コンテキストオブジェクトの解放
     EVP_PKEY_CTX_free(KeyCtx);
     
     //以下、秘密鍵生成のコード
     BIO *privateBIO = BIO_new(BIO_s_mem());
 
-    PEM_write_bio_PrivateKey(privateBIO, key, NULL, NULL, 0, 0, NULL); //ここでセグメンテーションフォルトが発生しているらしい
-
+    PEM_write_bio_PrivateKey(privateBIO, key, NULL, NULL, 0, 0, NULL); 
     int privatekeyLen = BIO_pending(privateBIO);
 
     unsigned char *privateKeyChar = (unsigned char *) malloc(privatekeyLen);
@@ -67,16 +75,27 @@ int main() {
     BIO_read(publicBIO, publicKeyChar, publickeyLen);
 
     // publicKeyChar(公開鍵) の内容を出力
-    std::cout << "Public Key:\n" << publicKeyChar << std::endl;
+    std::cout << "Public Key:\n";
 
     unsigned char *rsaPublicKeyChar = publicKeyChar;
 
     BIO *rsaPublicBIO = BIO_new_mem_buf(rsaPublicKeyChar, -1);
 
     EVP_PKEY *rsaPublicKey = NULL;
-    PEM_read_bio_PUBKEY(rsaPublicBIO, &rsaPublicKey, NULL, NULL);
+    EVP_PKEY *publicKey = PEM_read_bio_PUBKEY(rsaPublicBIO, &rsaPublicKey, NULL, NULL);
+    
+    if (!publicKey) {
+    std::cerr << "Failed to read public key from BIO" << std::endl;
+    BIO_free(rsaPublicBIO);
+    return 1;
+    } else {
+        std::cout << "Success Read public key from BIO" << std::endl;
+    }
 
-    EVP_PKEY *publicKey = EVP_PKEY_new();
+    // BIO を解放
+    BIO_free(rsaPublicBIO);
+
+    //EVP_PKEY *publicKey = EVP_PKEY_new();
     EVP_PKEY_assign_RSA(publicKey, rsaPublicKey);
 
     EVP_CIPHER_CTX *rsaEncryptCtx = EVP_CIPHER_CTX_new();
