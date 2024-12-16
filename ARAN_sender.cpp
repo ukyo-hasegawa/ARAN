@@ -9,18 +9,33 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <stdint.h>
-#include "RSA.h"
+#include "RSA/RSA.h"
 
 
-struct RDP
-{
-    std::string type; //識別子
-    std::string own_ip; //自身のIPアドレス
-    std::string dest_ip; //宛先IPアドレス
-    std::string cert; //証明書
-    std::uint32_t n; //ランダムな値
-    std::string t; //現在時刻
+struct RDP {
+    std::string type;     // 識別子
+    std::string own_ip;   // 自身のIPアドレス
+    std::string dest_ip;  // 宛先IPアドレス
+    std::string cert;     // 証明書
+    std::uint32_t n;      // ランダムな値
+    std::string t;        // 現在時刻
+    std::string expires;  // 証明書有効期限
+    std::vector<unsigned char> signature; //署名
 };
+
+// 有効期限を計算する関数
+std::string calculateExpirationTime(int durationHours) {
+    auto now = std::chrono::system_clock::now();
+    auto expirationTime = now + std::chrono::hours(durationHours);
+
+    // 有効期限を文字列にフォーマット
+    std::time_t expiration = std::chrono::system_clock::to_time_t(expirationTime);
+    std::tm* localExpiration = std::localtime(&expiration);
+
+    std::ostringstream timeStream;
+    timeStream << std::put_time(localExpiration, "%Y-%m-%d %H:%M:%S");
+    return timeStream.str();
+}
 
 int main() {
 
@@ -44,12 +59,10 @@ int main() {
     //RDPを生成するコード
     //RDP test_rdp1 = {"RDP","10.0.0.1","10.0.0.1","certification",rnd(),formattedTime}; //テスト用のため適当に設定
 
-        //現在時刻の取得
+    //現在時刻の取得
     auto now = std::chrono::system_clock::now();
-
     //時刻をtime_tに変換
     std::time_t currentTime = std::chrono::system_clock::to_time_t(now);
-
     // ローカル時刻にフォーマット
     std::tm* localTime = std::localtime(&currentTime);
 
@@ -58,22 +71,35 @@ int main() {
     timeStream << std::put_time(localTime, "%Y-%m-%d %H:%M:%S");
     std::string formattedTime = timeStream.str();
 
-    //証明書作成にあたり文字列の連結を行う(IP,pubkey,timestamp,certificate expires)
-    std::string certificate = test_rdp1.own_ip+","+publicKeyPEM+","+formattedTime+","+
+    // 有効期限を計算（例: 24時間後）
+    std::string expirationTime = calculateExpirationTime(24);
 
-    std::string message;
-    std::cout << "署名するメッセージを入力してください: ";
+    std::vector<unsigned char> signature;
+
+    // RDP作成
+    RDP test_rdp1 = {
+        "RDP",              // 識別子
+        "10.0.0.1",         // 自身のIP
+        "10.255.255.255",   // 宛先IP
+        publicKeyPEM + "," + formattedTime + "," + expirationTime,  // 証明書
+        std::random_device()(), // ランダム値
+        formattedTime,      // 現在時刻
+        expirationTime,      // 有効期限
+        signature 
+    };
+
+    std::string message = test_rdp1.cert;
     std::getline(std::cin, message);
     
     // 署名の生成
-    std::vector<unsigned char> signature = signMessage(pkey, message);
-    if (signature.empty()) {
+    test_rdp1.signature = signMessage(pkey, message);
+    if (test_rdp1.signature.empty()) {
         EVP_PKEY_free(pkey);
         return -1;
     }
 
     std::cout << "生成された署名 (バイナリデータ):" << std::endl;
-    for (unsigned char c : signature) {
+    for (unsigned char c : test_rdp1.signature) {
         printf("%02X", c);
     }
     std::cout << std::endl;
@@ -81,8 +107,6 @@ int main() {
 
     // メモリの解放
     EVP_PKEY_free(pkey);
-
-
 
     std::cout << "before test_rdp1.type :" << test_rdp1.type << std::endl;
     std::cout << "before test_rdp1.dest_ip :" << test_rdp1.dest_ip << std::endl; 
