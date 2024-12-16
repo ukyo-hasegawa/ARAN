@@ -1,6 +1,5 @@
 #ifndef RSA
 #define RSA
-
 #include <openssl/evp.h>
 #include <string>
 #include <vector>

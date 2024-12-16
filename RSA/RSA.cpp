@@ -120,47 +120,99 @@ std::string decryptMessage(EVP_PKEY* pkey, const std::vector<unsigned char>& enc
     return std::string(decryptedMessage.begin(), decryptedMessage.end());
 }
 
+// メッセージに署名を付与
+std::vector<unsigned char> signMessage(EVP_PKEY* privateKey, const std::string& message) {
+    EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+    if (!ctx) {
+        std::cerr << "署名コンテキストの作成に失敗しました。" << std::endl;
+        return {};
+    }
+
+    if (EVP_DigestSignInit(ctx, NULL, EVP_sha256(), NULL, privateKey) <= 0) {
+        std::cerr << "署名の初期化に失敗しました。" << std::endl;
+        EVP_MD_CTX_free(ctx);
+        return {};
+    }
+
+    size_t sigLen;
+    if (EVP_DigestSign(ctx, NULL, &sigLen, reinterpret_cast<const unsigned char*>(message.c_str()), message.size()) <= 0) {
+        std::cerr << "署名長の取得に失敗しました。" << std::endl;
+        EVP_MD_CTX_free(ctx);
+        return {};
+    }
+
+    std::vector<unsigned char> signature(sigLen);
+    if (EVP_DigestSign(ctx, signature.data(), &sigLen, reinterpret_cast<const unsigned char*>(message.c_str()), message.size()) <= 0) {
+        std::cerr << "署名の生成に失敗しました。" << std::endl;
+        EVP_MD_CTX_free(ctx);
+        return {};
+    }
+
+    EVP_MD_CTX_free(ctx);
+    signature.resize(sigLen);
+    return signature;
+}
+
+// 署名の検証
+bool verifySignature(EVP_PKEY* publicKey, const std::string& message, const std::vector<unsigned char>& signature) {
+    EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+    if (!ctx) {
+        std::cerr << "検証コンテキストの作成に失敗しました。" << std::endl;
+        return false;
+    }
+
+    if (EVP_DigestVerifyInit(ctx, NULL, EVP_sha256(), NULL, publicKey) <= 0) {
+        std::cerr << "検証の初期化に失敗しました。" << std::endl;
+        EVP_MD_CTX_free(ctx);
+        return false;
+    }
+
+    int result = EVP_DigestVerify(ctx, signature.data(), signature.size(), reinterpret_cast<const unsigned char*>(message.c_str()), message.size());
+    EVP_MD_CTX_free(ctx);
+
+    if (result == 1) {
+        return true; // 検証成功
+    } else if (result == 0) {
+        std::cerr << "署名が一致しません。" << std::endl;
+    } else {
+        std::cerr << "検証中にエラーが発生しました。" << std::endl;
+    }
+    return false;
+}
+
 int main() {
-    // キーペアの生成
+    // キーペア生成
     EVP_PKEY* pkey = createRSAKeyPair();
     if (!pkey) {
         return -1;
     }
 
     std::string message;
-    // 平文の入力
-    std::cout << "平文を入力してください: ";
+    std::cout << "署名するメッセージを入力してください: ";
     std::getline(std::cin, message);
 
-    // 公開鍵と秘密鍵の取得と表示
-    std::string publicKey = getPublicKey(pkey);
-    std::string privateKey = getPrivateKey(pkey);
-    std::cout << "\n公開鍵:\n" << publicKey << std::endl;
-    std::cout << "秘密鍵:\n" << privateKey << std::endl;
-
-    // メッセージの暗号化
-    auto encryptedMessage = encryptMessage(pkey, message);
-    if (encryptedMessage.empty()) {
+    // 署名の生成
+    std::vector<unsigned char> signature = signMessage(pkey, message);
+    if (signature.empty()) {
         EVP_PKEY_free(pkey);
         return -1;
     }
 
-    std::cout << "暗号化された文字列 (バイナリデータ):" << std::endl;
-    for (unsigned char c : encryptedMessage) {
+    std::cout << "生成された署名 (バイナリデータ):" << std::endl;
+    for (unsigned char c : signature) {
         printf("%02X", c);
     }
     std::cout << std::endl;
 
-    // メッセージの復号
-    std::string decryptedMessage = decryptMessage(pkey, encryptedMessage);
-    if (decryptedMessage.empty()) {
-        EVP_PKEY_free(pkey);
-        return -1;
-    }
+    // 公開鍵の取得
+    std::string publicKeyPEM = getPublicKey(pkey);
+    std::cout << "\n公開鍵 (PEM形式):\n" << publicKeyPEM << std::endl;
 
-    std::cout << "復号された文字列: " << decryptedMessage << std::endl;
+    // 署名の検証
+    bool isValid = verifySignature(pkey, message, signature);
+    std::cout << "署名の検証結果: " << (isValid ? "成功" : "失敗") << std::endl;
 
-    // EVP_PKEYの解放
+    // メモリの解放
     EVP_PKEY_free(pkey);
 
     return 0;
