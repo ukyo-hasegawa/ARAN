@@ -9,33 +9,46 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <stdint.h>
+#include "RSA.h"
 
 
 struct RDP
 {
     std::string type; //識別子
+    std::string own_ip; //自身のIPアドレス
     std::string dest_ip; //宛先IPアドレス
     std::string cert; //証明書
     std::uint32_t n; //ランダムな値
     std::string t; //現在時刻
 };
 
-
 int main() {
 
     //証明書の取得を行う
+    EVP_PKEY* pkey = createRSAKeyPair();
+    if (!pkey) {
+        return -1;
+    }
 
-    //
+    // 公開鍵の取得
+    std::string publicKeyPEM = getPublicKey(pkey);
+    std::cout << "\n公開鍵 (PEM形式):\n" << publicKeyPEM << std::endl;
 
+    /* 署名の検証 受信ノードが行う
+    bool isValid = verifySignature(pkey, message, signature);
+    std::cout << "署名の検証結果: " << (isValid ? "成功" : "失敗") << std::endl;
+    */
 
     std::random_device rnd;
+    
+    //RDPを生成するコード
+    //RDP test_rdp1 = {"RDP","10.0.0.1","10.0.0.1","certification",rnd(),formattedTime}; //テスト用のため適当に設定
 
-    //現在時刻の取得
+        //現在時刻の取得
     auto now = std::chrono::system_clock::now();
 
     //時刻をtime_tに変換
     std::time_t currentTime = std::chrono::system_clock::to_time_t(now);
-
 
     // ローカル時刻にフォーマット
     std::tm* localTime = std::localtime(&currentTime);
@@ -44,9 +57,32 @@ int main() {
     std::ostringstream timeStream;
     timeStream << std::put_time(localTime, "%Y-%m-%d %H:%M:%S");
     std::string formattedTime = timeStream.str();
+
+    //証明書作成にあたり文字列の連結を行う(IP,pubkey,timestamp,certificate expires)
+    std::string certificate = test_rdp1.own_ip+","+publicKeyPEM+","+formattedTime+","+
+
+    std::string message;
+    std::cout << "署名するメッセージを入力してください: ";
+    std::getline(std::cin, message);
     
-    //RDPを生成するコード
-    RDP test_rdp1 = {"RDP","10.0.0.1","certification",rnd(),formattedTime}; //テスト用のため適当に設定
+    // 署名の生成
+    std::vector<unsigned char> signature = signMessage(pkey, message);
+    if (signature.empty()) {
+        EVP_PKEY_free(pkey);
+        return -1;
+    }
+
+    std::cout << "生成された署名 (バイナリデータ):" << std::endl;
+    for (unsigned char c : signature) {
+        printf("%02X", c);
+    }
+    std::cout << std::endl;
+
+
+    // メモリの解放
+    EVP_PKEY_free(pkey);
+
+
 
     std::cout << "before test_rdp1.type :" << test_rdp1.type << std::endl;
     std::cout << "before test_rdp1.dest_ip :" << test_rdp1.dest_ip << std::endl; 

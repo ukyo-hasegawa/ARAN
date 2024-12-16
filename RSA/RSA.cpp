@@ -3,7 +3,8 @@
 #include <openssl/err.h>
 #include <iostream>
 #include <string>
-
+#include <chrono>
+#include <ctime>
 #include <vector>
 
 // キーペアの生成
@@ -139,7 +140,7 @@ std::vector<unsigned char> signMessage(EVP_PKEY* privateKey, const std::string& 
         std::cerr << "署名長の取得に失敗しました。" << std::endl;
         EVP_MD_CTX_free(ctx);
         return {};
-    }
+    } 
 
     std::vector<unsigned char> signature(sigLen);
     if (EVP_DigestSign(ctx, signature.data(), &sigLen, reinterpret_cast<const unsigned char*>(message.c_str()), message.size()) <= 0) {
