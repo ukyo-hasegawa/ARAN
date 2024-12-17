@@ -1,5 +1,5 @@
-#ifndef RSA_UTILS_H
-#define RSA_UTILS_H
+#ifndef RSA_H
+#define RSA_H
 
 #include <openssl/evp.h>
 #include <string>
@@ -26,4 +26,4 @@ std::vector<unsigned char> signMessage(EVP_PKEY* privateKey, const std::string& 
 // 署名の検証
 bool verifySignature(EVP_PKEY* publicKey, const std::string& message, const std::vector<unsigned char>& signature);
 
-#endif // RSA_UTILS_H
+#endif // RSA_H

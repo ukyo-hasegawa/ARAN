@@ -12,7 +12,7 @@
 #include "RSA/RSA.h"
 
 
-struct RDP {
+struct data_format {
     std::string type;     // 識別子
     std::string own_ip;   // 自身のIPアドレス
     std::string dest_ip;  // 宛先IPアドレス
@@ -77,7 +77,7 @@ int main() {
     std::vector<unsigned char> signature;
 
     // RDP作成
-    RDP test_rdp1 = {
+    data_format test_rdp1 = {
         "RDP",              // 識別子
         "10.0.0.1",         // 自身のIP
         "10.255.255.255",   // 宛先IP

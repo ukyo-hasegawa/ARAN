@@ -6,6 +6,7 @@
 #include <chrono>
 #include <ctime>
 #include <vector>
+#include "RSA.h"
 
 // キーペアの生成
 EVP_PKEY* createRSAKeyPair() {
