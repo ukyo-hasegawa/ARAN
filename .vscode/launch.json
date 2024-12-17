@@ -1,7 +1,26 @@
 {
-    // IntelliSense を使用して利用可能な属性を学べます。
-    // 既存の属性の説明をホバーして表示します。
-    // 詳細情報は次を確認してください: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
-    "configurations": []
+    "configurations": [
+        {
+            "name": "C++ Debug - ARAN_sender",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/ARAN_sender", // コンパイルした実行ファイル
+            "args": [], // 実行時の引数があればここに設定
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+            "preLaunchTask": "compile ARAN_sender", // コンパイルタスクを指定
+            "miDebuggerPath": "/usr/bin/gdb" // GDBのパス
+        }
+    ]
 }
