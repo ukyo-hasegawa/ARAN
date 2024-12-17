@@ -128,6 +128,8 @@ std::vector<unsigned char> signMessage(EVP_PKEY* privateKey, const std::string& 
     if (!ctx) {
         std::cerr << "署名コンテキストの作成に失敗しました。" << std::endl;
         return {};
+    } else {
+        std::cout << "generate signature" << std::endl;
     }
 
     if (EVP_DigestSignInit(ctx, NULL, EVP_sha256(), NULL, privateKey) <= 0) {

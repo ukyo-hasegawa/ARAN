@@ -53,7 +53,7 @@ int main() {
     bool isValid = verifySignature(pkey, message, signature);
     std::cout << "署名の検証結果: " << (isValid ? "成功" : "失敗") << std::endl;
     */
-
+    std::cout << "rnd generate" << std::endl;
     std::random_device rnd;
     
     //RDPを生成するコード
@@ -70,6 +70,7 @@ int main() {
     std::ostringstream timeStream;
     timeStream << std::put_time(localTime, "%Y-%m-%d %H:%M:%S");
     std::string formattedTime = timeStream.str();
+    std::cout << "time:" << formattedTime << std::endl;
 
     // 有効期限を計算（例: 24時間後）
     std::string expirationTime = calculateExpirationTime(24);

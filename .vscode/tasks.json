@@ -1,47 +1,24 @@
 {
+    "version": "2.0.0",
     "tasks": [
         {
             "label": "compile ARAN_sender",
             "type": "shell",
             "command": "g++",
             "args": [
-                "-g",
-                "-o",
-                "ARAN_sender",
+                "-g", // デバッグ情報を含める
+                "-o", "ARAN_sender", // 出力実行ファイル名
                 "ARAN_sender.cpp",
-                "RSA/RSA.cpp",
+                "RSA/RSA.cpp", // RSA.cppを含める
                 "-lssl",
                 "-lcrypto"
-            ],
-            "group": "build",
-            "problemMatcher": [
-                "$gcc"
-            ],
-            "detail": "コンパイルタスク: ARAN_sender をビルド"
-        },
-        {
-            "type": "cppbuild",
-            "label": "C/C++: g++ アクティブなファイルのビルド",
-            "command": "/usr/bin/g++",
-            "args": [
-                "-fdiagnostics-color=always",
-                "-g",
-                "${file}",
-                "-o",
-                "${fileDirname}/${fileBasenameNoExtension}"
-            ],
-            "options": {
-                "cwd": "${fileDirname}"
-            },
-            "problemMatcher": [
-                "$gcc"
             ],
             "group": {
                 "kind": "build",
                 "isDefault": true
             },
-            "detail": "デバッガーによって生成されたタスク。"
+            "problemMatcher": ["$gcc"],
+            "detail": "コンパイルタスク: ARAN_sender をビルド"
         }
-    ],
-    "version": "2.0.0"
+    ]
 }
