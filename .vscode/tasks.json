@@ -1,6 +1,25 @@
 {
     "tasks": [
         {
+            "label": "compile ARAN_sender",
+            "type": "shell",
+            "command": "g++",
+            "args": [
+                "-g",
+                "-o",
+                "ARAN_sender",
+                "ARAN_sender.cpp",
+                "RSA/RSA.cpp",
+                "-lssl",
+                "-lcrypto"
+            ],
+            "group": "build",
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "detail": "コンパイルタスク: ARAN_sender をビルド"
+        },
+        {
             "type": "cppbuild",
             "label": "C/C++: g++ アクティブなファイルのビルド",
             "command": "/usr/bin/g++",
@@ -9,8 +28,7 @@
                 "-g",
                 "${file}",
                 "-o",
-                "${fileDirname}/${fileBasenameNoExtension}",
-                "-lcrypto",
+                "${fileDirname}/${fileBasenameNoExtension}"
             ],
             "options": {
                 "cwd": "${fileDirname}"
