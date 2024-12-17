@@ -43,6 +43,8 @@ int main() {
     EVP_PKEY* pkey = createRSAKeyPair();
     if (!pkey) {
         return -1;
+    }else {
+        std::cout <<"create pkey" << std::endl;
     }
 
     // 公開鍵の取得
@@ -90,6 +92,7 @@ int main() {
     };
 
     std::string message = test_rdp1.cert;
+    std::cout << "message:" << message << std::endl;
     std::getline(std::cin, message);
     
     // 署名の生成
