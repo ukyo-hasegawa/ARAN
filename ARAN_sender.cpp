@@ -177,6 +177,9 @@ int main() {
         return 1;
     }
 
+    std::cout << "Send finish";
+
+
     close(sock);
 
 }

@@ -16,9 +16,7 @@ class TopologyGenerator:
   def __init__(self,width=3,height=3):
     self.x=width;
     self.y=height;
-    self.prot="";
-    self.jars=["jpbc-pbc-2.0.0.jar","jpbc-plaf-2.0.0.jar","jpbc-pbc-2.0.0.jar"];
-
+    
   def params(self,args):
     self.cpu_rate_flag=False
     for param in args:
@@ -26,18 +24,8 @@ class TopologyGenerator:
         self.x=int(param.split(":")[1]);
       if param.startswith("-h"):
         self.y=int(param.split(":")[1]);
-      if param.startswith("-p"):
-        self.prot=param.split(":")[1];
-      if param.startswith("-m"):
-        self.mode=param.split(":")[1];
-      if param.startswith("-er"):
-        self.error_rate=param.split(":")[1];
-      if param.startswith("-cpu"):
-        self.cpu_rate=param.split(":")[1];
-        self.cpu_rate_flag=True;
-        
-
-    print("w:"+str(self.x)+" h:"+str(self.y)+" p:"+self.prot);
+      
+    print("w:"+str(self.x)+" h:"+str(self.y));
 
   def generate(self):
     #net = Mininet_wifi(link=wmediumd, wmediumd_mode=interference,noise_th=-91, fading_cof=1)
@@ -80,28 +68,13 @@ class TopologyGenerator:
     net.build()
 
     #self.sendCommand();
-    self.writeCommand();
+    #self.writeCommand();
     info("*** Running CLI\n")
     time.sleep(0.5);
     cliwifi=CLI(net)
     info("*** Stopping network\n")
     net.stop()
-  
-  def writeCommand(self):
-    num=self.x*self.y;
-    with open("cmd.txt", mode='w') as f:
-      for i in range(1,num):
-        f.write("py sta"+str(i+1)+".cmd(\"xterm -n sta"+str(i+1)+" -hold -e bash run_isdsr_"+self.prot.lower()+".sh -i sta"+str(i+1)+"-wlan0 &\")\n");
-  
-  def sendCommand(self):
-    num=self.x*self.y;
-    for i in range(1,num):
-      print("index:"+str(i)+ " is set cmd: "+self.prot.lower()+".sh");
-      #self.stas[i].sendCmd("xterm -e "+self.cmdf);
-      #if i != 10:
-      time.sleep(0.1);
-      self.stas[i].sendCmd("xterm -n sta"+str(num)+" -hold -e bash "+self.prot.lower()+".sh");
-
+    
   def setPromisc(self):
     info("*** Interface configuration ***")
     num=self.x*self.y;
@@ -119,7 +92,6 @@ if __name__ == '__main__':
 
   if len(args) != 4:
     print("usage python location.py -w:width -h:height -p:protocol ");
-  
   
   topo=TopologyGenerator();
   topo.params(args);
