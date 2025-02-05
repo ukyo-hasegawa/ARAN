@@ -25,11 +25,13 @@
             "label": "C/C++: aarch64-linux-gnu-g++ アクティブなファイルのビルド",
             "command": "/usr/bin/aarch64-linux-gnu-g++",
             "args": [
-                "-fdiagnostics-color=always",
                 "-g",
-                "${file}",
                 "-o",
-                "${fileDirname}/${fileBasenameNoExtension}"
+                "ARAN_sender",
+                "ARAN_sender.cpp",
+                "RSA/RSA.cpp",
+                "-lssl",
+                "-lcrypto"
             ],
             "options": {
                 "cwd": "${fileDirname}"

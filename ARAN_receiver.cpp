@@ -31,6 +31,8 @@ int main(){
     if (bind(sock, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
         std::cerr << "Failed to bind socket" << std::endl;
         return 1;
+    } else {
+        std::cout << "bind sucess" << std::endl;
     }
 
     // 受信
@@ -39,6 +41,9 @@ int main(){
     if (received_bytes < 0) {
         std::cerr << "Failed to receive data" << std::endl;
         return 1;
+    } else
+    {
+        std::cout << "receive sucess" << std::endl;
     }
 
     // バッファを std::vector<uint8_t> に変換

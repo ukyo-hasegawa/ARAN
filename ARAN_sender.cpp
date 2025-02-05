@@ -83,7 +83,7 @@ int main() {
     data_format test_rdp1 = {
         "RDP",              // 識別子
         "10.0.0.1",         // 自身のIP
-        "10.255.255.255",   // 宛先IP
+        "10.0.0.2",   // 宛先IP
         publicKeyPEM + "," + formattedTime + "," + expirationTime,  // 証明書
         std::random_device()(), // ランダム値
         formattedTime,      // 現在時刻
@@ -97,8 +97,10 @@ int main() {
     
     // 署名の生成
     test_rdp1.signature = signMessage(pkey, message);
+    std::cout << "check point 1" << std::endl;
     if (test_rdp1.signature.empty()) {
         EVP_PKEY_free(pkey);
+        std::cout << "EVP_PKEY_free(pkey)" << std::endl;
         return -1;
     }
 
@@ -159,10 +161,10 @@ int main() {
         std::cerr << "Socket creation failed" << std::endl;
         return 1;
     }
-    //ブロードキャストの設定
+    //宛先の設定
     addr.sin_family = AF_INET;
     addr.sin_port = htons(12345);
-    addr.sin_addr.s_addr = inet_addr("10.255.255.255");
+    addr.sin_addr.s_addr = inet_addr("10.0.0.2");
 
     //ソケットオプションの設定
     if(setsockopt(sock,SOL_SOCKET,SO_BROADCAST,reinterpret_cast<const char*>(&yes),sizeof(yes)) < 0) {
@@ -171,10 +173,15 @@ int main() {
         return 1;
     }
 
-    if (sendto(sock, buf.data(), buf.size(), 0, reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr)) < 0) {
+    if (sendto(sock, buf.data(), buf.size(), 0, reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr)) < 0) 
+    {
         std::cerr << "Failed to send message" << std::endl;
         close(sock);
         return 1;
+    } 
+    else 
+    {
+        std::cout << "send sucess" << std::endl;
     }
 
     std::cout << "Send finish";
