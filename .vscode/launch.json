@@ -6,6 +6,7 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/ARAN_sender", // コンパイルした実行ファイル
+            /*
             "args": [
                 "-g",
                 "-o",
@@ -15,6 +16,8 @@
                 "-lssl",
                 "-lcrypto"
             ], // 実行時の引数があればここに設定
+            */
+            "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],

@@ -3,118 +3,190 @@
 #include <cstring>
 #include <vector>
 #include <iostream>
+#include <sstream>
+#include <openssl/pem.h>
+#include <openssl/rsa.h>
+#include <openssl/err.h>
+#include <ifaddrs.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <netdb.h>
+#include "RSA/RSA.h"
 
-struct RDP
-{
-    std::string type; //識別子
-    std::string dest_ip; //宛先IPアドレス
-    std::string cert; //証明書
-    std::uint32_t n; //ランダムな値
-    std::string t; //現在時刻
+struct data_format {
+    std::string type;
+    std::string own_ip;
+    std::string dest_ip;
+    std::string cert;
+    std::uint32_t n;
+    std::string t;
+    std::string expires;
+    std::vector<unsigned char> signature;
 };
 
+std::vector<std::string> get_own_ip() {
+    std::vector<std::string> ip_addresses;
+    struct ifaddrs *ifaddr, *ifa;
+    char host[NI_MAXHOST];
 
-int main(){
-    //ブロードキャストを受信するコード
+    if (getifaddrs(&ifaddr) == -1) {
+        std::cerr << "Failed to get network interfaces" << std::endl;
+        return ip_addresses;
+    }
+
+    for (ifa = ifaddr; ifa != nullptr; ifa = ifa->ifa_next) {
+        if (ifa->ifa_addr == nullptr) continue;
+        if (ifa->ifa_addr->sa_family == AF_INET) {  
+            struct sockaddr_in *addr = (struct sockaddr_in *)ifa->ifa_addr;
+            inet_ntop(AF_INET, &addr->sin_addr, host, NI_MAXHOST);
+            ip_addresses.push_back(std::string(host));
+        }
+    }
+
+    freeifaddrs(ifaddr);
+    return ip_addresses;
+}
+
+// 公開鍵を読み込む関数
+EVP_PKEY* load_public_key(const std::string& filename) {
+    FILE* file = fopen(filename.c_str(), "rb");
+    if (!file) {
+        std::cerr << "Failed to open public key file: " << filename << std::endl;
+        return nullptr;
+    }
+
+    EVP_PKEY* pkey = PEM_read_PUBKEY(file, nullptr, nullptr, nullptr);
+    fclose(file);
+
+    if (!pkey) {
+        std::cerr << "Failed to load public key" << std::endl;
+        ERR_print_errors_fp(stderr);
+    }
+
+    return pkey;
+}
+
+int main() {
+    // ブロードキャスト受信の設定
     int sock;
-    struct  sockaddr_in addr;
-
+    struct sockaddr_in addr;
     char buf[2048];
+    std::vector<std::string> ip_address = get_own_ip();
 
     sock = socket(AF_INET, SOCK_DGRAM, 0);
-    
     addr.sin_family = AF_INET;
     addr.sin_port = htons(12345);
     addr.sin_addr.s_addr = INADDR_ANY;
 
-    // バインド
+    // バインド処理
     if (bind(sock, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
         std::cerr << "Failed to bind socket" << std::endl;
         return 1;
-    } else {
-        std::cout << "bind sucess" << std::endl;
     }
+    std::cout << "bind success" << std::endl;
 
-    // 受信
+    // 受信処理
     memset(buf, 0, sizeof(buf));
     ssize_t received_bytes = recv(sock, buf, sizeof(buf), 0);
     if (received_bytes < 0) {
         std::cerr << "Failed to receive data" << std::endl;
         return 1;
-    } else
-    {
-        std::cout << "receive sucess" << std::endl;
     }
+    std::cout << "receive success" << std::endl;
 
-    // バッファを std::vector<uint8_t> に変換
+    // 公開鍵の取得
+    EVP_PKEY* public_key = load_public_key("public_key.pem");
+    if (!public_key) {
+        std::cerr << "Error: Could not load public key!" << std::endl;
+        return 1;
+    }
+    std::cout << "Public key loaded successfully!" << std::endl;
+
+    // 受信データを std::vector<uint8_t> に変換
     std::vector<uint8_t> recv_buf(buf, buf + received_bytes);
 
-    // デシリアライズするコード
-    try {
-        RDP deserialized_rdp;
-        std::size_t offset = 0;
 
-        // ヘルパー関数: バッファから文字列をデシリアライズ
-        auto deserialize_string = [&recv_buf, &offset]() {
-            if (offset + 4 > recv_buf.size()) {
-                throw std::runtime_error("Buffer underflow while reading string length");
-            }
+    data_format deserialized_rdp;
+    std::size_t offset = 0;
 
-            // 長さを取得 (4バイト)
-            std::uint32_t len = 0;
-            len |= recv_buf[offset + 0] << 0;
-            len |= recv_buf[offset + 1] << 8;
-            len |= recv_buf[offset + 2] << 16;
-            len |= recv_buf[offset + 3] << 24;
-            offset += 4;
+    // ヘルパー関数: バッファから文字列をデシリアライズ
+    auto deserialize_string = [&recv_buf, &offset]() {
+        if (offset + 4 > recv_buf.size()) throw std::runtime_error("Buffer underflow while reading string length");
 
-            // 文字列データを取得
-            if (offset + len > recv_buf.size()) {
-                throw std::runtime_error("Buffer underflow while reading string data");
-            }
+        std::uint32_t len = 0;
+        len |= recv_buf[offset + 0] << 0;
+        len |= recv_buf[offset + 1] << 8;
+        len |= recv_buf[offset + 2] << 16;
+        len |= recv_buf[offset + 3] << 24;
+        offset += 4;
 
-            std::string result(recv_buf.begin() + offset, recv_buf.begin() + offset + len);
-            offset += len;
+        if (offset + len > recv_buf.size()) throw std::runtime_error("Buffer underflow while reading string data");
 
-            return result;
-        };
+        std::string result(recv_buf.begin() + offset, recv_buf.begin() + offset + len);
+        offset += len;
+        return result;
+    };
 
-        // ヘルパー関数: バッファから整数をデシリアライズ
-        auto deserialize_int32 = [&recv_buf, &offset]() {
-            if (offset + 4 > recv_buf.size()) {
-                throw std::runtime_error("Buffer underflow while reading int32");
-            }
+    // ヘルパー関数: バッファから整数をデシリアライズ
+    auto deserialize_int32 = [&recv_buf, &offset]() {
+        if (offset + 4 > recv_buf.size()) throw std::runtime_error("Buffer underflow while reading int32");
 
-            // 4バイトを整数に変換
-            std::int32_t value = 0;
-            value |= recv_buf[offset + 0] << 0;
-            value |= recv_buf[offset + 1] << 8;
-            value |= recv_buf[offset + 2] << 16;
-            value |= recv_buf[offset + 3] << 24;
-            offset += 4;
+        std::int32_t value = 0;
+        value |= recv_buf[offset + 0] << 0;
+        value |= recv_buf[offset + 1] << 8;
+        value |= recv_buf[offset + 2] << 16;
+        value |= recv_buf[offset + 3] << 24;
+        offset += 4;
+        return value;
+    };
 
-            return value;
-        };
+    // デシリアライズ処理
+    deserialized_rdp.type = deserialize_string();
+    deserialized_rdp.dest_ip = deserialize_string();
+    deserialized_rdp.cert = deserialize_string();
+    deserialized_rdp.n = deserialize_int32();
+    deserialized_rdp.t = deserialize_string();
 
-        // デシリアライズ処理
-        deserialized_rdp.type = deserialize_string();
-        deserialized_rdp.dest_ip = deserialize_string();
-        deserialized_rdp.cert = deserialize_string();
-        deserialized_rdp.n = deserialize_int32();
-        deserialized_rdp.t = deserialize_string();
+    // 署名をデシリアライズ
+    std::string signature_str = deserialize_string();
+    deserialized_rdp.signature = std::vector<unsigned char>(signature_str.begin(), signature_str.end());
 
-        // 結果を表示
-        std::cout << "Deserialized RDP:" << std::endl;
-        std::cout << "Type: " << deserialized_rdp.type << std::endl;
-        std::cout << "Destination IP: " << deserialized_rdp.dest_ip << std::endl;
-        std::cout << "Certificate: " << deserialized_rdp.cert << std::endl;
-        std::cout << "Random Number: " << deserialized_rdp.n << std::endl;
-        std::cout << "Timestamp: " << deserialized_rdp.t << std::endl;
-    } catch (const std::exception& e) {
-        std::cerr << "Error during deserialization: " << e.what() << std::endl;
+    // 送信側と同じ `message` を構築
+    std::ostringstream messageStream;
+    messageStream << deserialized_rdp.type << "|"
+                    << deserialized_rdp.dest_ip << "|"
+                    << deserialized_rdp.cert << "|"
+                    << deserialized_rdp.n << "|"
+                    << deserialized_rdp.t;
+    std::string message = messageStream.str();
+
+    // 署名の検証
+    bool isValid = verifySignature(public_key, message, deserialized_rdp.signature);
+    std::cout << "署名の検証結果: " << (isValid ? "成功" : "失敗") << std::endl;
+
+    //std::cout << "ip_address: " << ip_address << std::endl;
+
+    // デバッグ出力
+    std::cout << "Own IP Addresses:" << std::endl;
+    for (const auto& ip : ip_address) {
+        std::cout << ip << std::endl;
+    }
+
+    // 宛先 IP を取得
+    std::string dest_ip = deserialized_rdp.dest_ip;
+    std::cout << "Destination IP (deserialized_rdp.dest_ip): " << dest_ip << std::endl;
+
+    // 宛先が自分自身か確認
+    if (isValid) {
+        auto it = std::find(ip_address.begin(), ip_address.end(), dest_ip);
+        if (it != ip_address.end()) {
+            std::cout << "This message is for this device!" << std::endl;
+        } else {
+            std::cout << "This message is for another device." << std::endl;
+        }
+    } else {
+        std::cout << "isValid is false" << std::endl;
     }
 
     return 0;
-
-//証明書を検証するコード
 }
