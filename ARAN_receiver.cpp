@@ -24,27 +24,33 @@ struct data_format {
     std::vector<unsigned char> signature;
 };
 
-std::vector<std::string> get_own_ip() {
-    std::vector<std::string> ip_addresses;
+std::string get_own_ip(const std::string& keyword = "wlan0") {
     struct ifaddrs *ifaddr, *ifa;
     char host[NI_MAXHOST];
 
     if (getifaddrs(&ifaddr) == -1) {
         std::cerr << "Failed to get network interfaces" << std::endl;
-        return ip_addresses;
+        return "";
     }
 
+    // インターフェースをリストし、名前に「wlan0」が含まれているインターフェースのIPを取得
     for (ifa = ifaddr; ifa != nullptr; ifa = ifa->ifa_next) {
         if (ifa->ifa_addr == nullptr) continue;
-        if (ifa->ifa_addr->sa_family == AF_INET) {  
-            struct sockaddr_in *addr = (struct sockaddr_in *)ifa->ifa_addr;
-            inet_ntop(AF_INET, &addr->sin_addr, host, NI_MAXHOST);
-            ip_addresses.push_back(std::string(host));
+
+        // インターフェース名がキーワードに一致する場合
+        if (std::string(ifa->ifa_name).find(keyword) != std::string::npos) {
+            if (ifa->ifa_addr->sa_family == AF_INET) { // IPv4アドレスを取得
+                struct sockaddr_in *addr = (struct sockaddr_in *)ifa->ifa_addr;
+                inet_ntop(AF_INET, &addr->sin_addr, host, NI_MAXHOST);
+                freeifaddrs(ifaddr);
+                return std::string(host);  // IPアドレスを返す
+            }
         }
     }
 
     freeifaddrs(ifaddr);
-    return ip_addresses;
+    std::cerr << "No IPv4 address found for an interface containing '" << keyword << "' in its name" << std::endl;
+    return "";
 }
 
 // 公開鍵を読み込む関数
@@ -71,7 +77,8 @@ int main() {
     int sock;
     struct sockaddr_in addr;
     char buf[2048];
-    std::vector<std::string> ip_address = get_own_ip();
+    std::string ip_address = get_own_ip();
+    std::string dest_ip = "";
 
     sock = socket(AF_INET, SOCK_DGRAM, 0);
     addr.sin_family = AF_INET;
@@ -173,13 +180,12 @@ int main() {
     }
 
     // 宛先 IP を取得
-    std::string dest_ip = deserialized_rdp.dest_ip;
+    dest_ip = deserialized_rdp.dest_ip;
     std::cout << "Destination IP (deserialized_rdp.dest_ip): " << dest_ip << std::endl;
 
     // 宛先が自分自身か確認
     if (isValid) {
-        auto it = std::find(ip_address.begin(), ip_address.end(), dest_ip);
-        if (it != ip_address.end()) {
+        if (dest_ip == ip_address) {
             std::cout << "This message is for this device!" << std::endl;
         } else {
             std::cout << "This message is for another device." << std::endl;
@@ -187,6 +193,7 @@ int main() {
     } else {
         std::cout << "isValid is false" << std::endl;
     }
+    //宛先でない場合、転送する。
 
     return 0;
 }
