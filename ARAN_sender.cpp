@@ -135,7 +135,7 @@ int main() {
     struct sockaddr_in addr;
     addr.sin_family = AF_INET;
     addr.sin_port = htons(12345);
-    addr.sin_addr.s_addr = inet_addr("10.0.0.2");
+    addr.sin_addr.s_addr = inet_addr("10.0.0.3");
 
     if (sendto(sock, buf.data(), buf.size(), 0, reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr)) < 0) {
         close(sock);

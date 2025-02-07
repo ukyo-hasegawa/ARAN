@@ -11,6 +11,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <unistd.h>
 #include "RSA/RSA.h"
 
 struct data_format {
@@ -51,6 +52,44 @@ std::string get_own_ip(const std::string& keyword = "wlan0") {
     freeifaddrs(ifaddr);
     std::cerr << "No IPv4 address found for an interface containing '" << keyword << "' in its name" << std::endl;
     return "";
+}
+
+void forward_message(const std::string& dest_ip, const std::string& message, const std::vector<unsigned char>& signature) {
+    int sock;
+    struct sockaddr_in dest_addr;
+    char buf[2048];
+
+    // ソケット作成
+    sock = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sock < 0) {
+        std::cerr << "Failed to create socket" << std::endl;
+        return;
+    }
+
+    // 宛先のIPアドレスとポート設定
+    memset(&dest_addr, 0, sizeof(dest_addr));
+    dest_addr.sin_family = AF_INET;
+    dest_addr.sin_port = htons(12345);
+    if (inet_pton(AF_INET, dest_ip.c_str(), &dest_addr.sin_addr) <= 0) {
+        std::cerr << "Invalid destination IP address" << std::endl;
+        close(sock);
+        return;
+    }
+
+    // 署名とメッセージを組み合わせて送信データを構築
+    std::vector<unsigned char> data;
+    data.insert(data.end(), message.begin(), message.end());
+    data.insert(data.end(), signature.begin(), signature.end());
+
+    // メッセージ送信
+    ssize_t sent_bytes = sendto(sock, data.data(), data.size(), 0, (struct sockaddr*)&dest_addr, sizeof(dest_addr));
+    if (sent_bytes < 0) {
+        std::cerr << "Failed to send data" << std::endl;
+    } else {
+        std::cout << "Forwarded message to " << dest_ip << " with signature" << std::endl;
+    }
+
+    close(sock);
 }
 
 // 公開鍵を読み込む関数
@@ -194,6 +233,8 @@ int main() {
         std::cout << "isValid is false" << std::endl;
     }
     //宛先でない場合、転送する。
+    forward_message(dest_ip,message,deserialized_rdp.signature);
+
 
     return 0;
 }
