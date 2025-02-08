@@ -1,1 +1,1 @@
-py sta2.cmd("xterm -n sta2.sh -i sta2-wlan0 &")
+xterm -n sta1 && xterm -n sta2 && xterm -n sta3 

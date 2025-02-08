@@ -90,9 +90,6 @@ if __name__ == '__main__':
   setLogLevel('info')
   args=sys.argv;
 
-  if len(args) != 4:
-    print("usage python location.py -w:width -h:height -p:protocol ");
-  
   topo=TopologyGenerator();
   topo.params(args);
   net=topo.generate();

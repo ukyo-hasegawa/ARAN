@@ -10,12 +10,9 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <stdint.h>
-#include <openssl/rsa.h>
-#include <openssl/err.h>
-#include <openssl/pem.h>
 #include <netdb.h>
 #include <ifaddrs.h>
-#include "RSA/RSA.h"
+#include "dilithium.h"
 
 struct data_format {
     std::string type;
@@ -76,30 +73,6 @@ void serialize_data(const data_format& test_rdp, std::vector<uint8_t>& buf) {
     serialize_string(std::string(test_rdp.signature.begin(), test_rdp.signature.end()));
 }
 
-// 秘密鍵を読み込む
-EVP_PKEY* load_private_key(const std::string& filename) {
-    FILE* file = fopen(filename.c_str(), "rb");
-    if (!file) {
-        std::cerr << "Failed to open private key file: " << filename << std::endl;
-        return nullptr;
-    }
-    EVP_PKEY* private_key = PEM_read_PrivateKey(file, nullptr, nullptr, nullptr);
-    fclose(file);
-    return private_key;
-}
-
-// 公開鍵を読み込む
-EVP_PKEY* load_public_key(const std::string& filename) {
-    FILE* file = fopen(filename.c_str(), "rb");
-    if (!file) {
-        std::cerr << "Failed to open public key file: " << filename << std::endl;
-        return nullptr;
-    }
-    EVP_PKEY* public_key = PEM_read_PUBKEY(file, nullptr, nullptr, nullptr);
-    fclose(file);
-    return public_key;
-}
-
 // 現在時刻の取得
 std::string get_time(){
     auto now = std::chrono::system_clock::now();
@@ -143,7 +116,6 @@ std::string calculateExpirationTime(int durationHours, const std::string& format
     return timeStream.str();
 }
 
-
 std::string get_own_ip(const std::string& keyword = "wlan0") {
     struct ifaddrs *ifaddr, *ifa;
     char host[NI_MAXHOST];
@@ -173,21 +145,38 @@ std::string get_own_ip(const std::string& keyword = "wlan0") {
     return "";
 }
 
-int main() {
-    EVP_PKEY* public_key = load_public_key("public_key.pem");
-    if (!public_key) return 1;
+std::vector<unsigned char> signMessage(const std::string& message, const std::vector<unsigned char>& private_key) {
+    std::vector<unsigned char> signature(CRYPTO_BYTES);
+    if (crypto_sign(signature.data(), nullptr, reinterpret_cast<const unsigned char*>(message.data()), message.size(), private_key.data()) != 0) {
+        std::cerr << "Failed to sign message" << std::endl;
+        return {};
+    }
+    return signature;
+}
 
-    EVP_PKEY* private_key = load_private_key("private_key.pem");
-    if (!private_key) return 1;
+bool verifySignature(const std::string& message, const std::vector<unsigned char>& signature, const std::vector<unsigned char>& public_key) {
+    if (crypto_sign_verify(signature.data(), reinterpret_cast<const unsigned char*>(message.data()), message.size(), public_key.data()) != 0) {
+        std::cerr << "Failed to verify signature" << std::endl;
+        return false;
+    }
+    return true;
+}
+
+int main() {
+    std::vector<unsigned char> public_key(CRYPTO_PUBLICKEYBYTES);
+    std::vector<unsigned char> private_key(CRYPTO_SECRETKEYBYTES);
+    if (crypto_sign_keypair(public_key.data(), private_key.data()) != 0) {
+        std::cerr << "Failed to generate key pair" << std::endl;
+        return 1;
+    }
 
     // 現在時刻の取得
     std::string formattedTime = get_time();
-
     std::string expirationTime = calculateExpirationTime(24, formattedTime);
 
     // 公開鍵を取得して証明書に含める
-    std::string publicKeyPEM = getPublicKey(public_key);
-    std::string cert_info =get_own_ip() + publicKeyPEM + "," + formattedTime + "," + expirationTime;
+    std::string publicKeyPEM(reinterpret_cast<char*>(public_key.data()), public_key.size());
+    std::string cert_info = get_own_ip() + publicKeyPEM + "," + formattedTime + "," + expirationTime;
 
     data_format test_rdp1 = {
         "RDP",
@@ -209,18 +198,16 @@ int main() {
     std::string message = messageStream.str();
 
     // 署名の生成
-    test_rdp1.signature = signMessage(private_key, message);
+    test_rdp1.signature = signMessage(message, private_key);
     if (test_rdp1.signature.empty()) return -1;
 
     // シリアライズ処理
     std::vector<uint8_t> buf;
     serialize_data(test_rdp1, buf);
 
-    if(send_process(buf)) {
-
+    if (send_process(buf)) {
+        std::cout << "Message sent successfully" << std::endl;
     }
 
-    EVP_PKEY_free(private_key);
-    EVP_PKEY_free(public_key);
     return 0;
 }
