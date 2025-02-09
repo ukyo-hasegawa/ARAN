@@ -17,16 +17,43 @@
 #include <ifaddrs.h>
 #include "RSA/RSA.h"
 
-struct data_format {
-    std::string type;
+struct Certificate_Format {
     std::string own_ip;
-    std::string dest_ip;
-    std::string cert;
-    std::uint32_t n;
+    std::string own_public_key;
     std::string t;
     std::string expires;
+};
+
+struct RDP_format {
+    std::string type;
+    std::string source_ip;
+    std::string dest_ip;
+    Certificate_Format cert;
+    std::uint32_t n;
+    std::string t;
     std::vector<unsigned char> signature;
 };
+
+RDP_format Makes_RDP(std::string type, std::string own_ip, std::string dest_ip, Certificate_Format cert, std::uint32_t n, std::string t, std::string expires, std::vector<unsigned char> signature) {
+    RDP_format rdp;
+    rdp.type = type;
+    rdp.source_ip = own_ip;
+    rdp.dest_ip = dest_ip;
+    rdp.cert = cert;
+    rdp.n = n;
+    rdp.t = t;
+    rdp.signature = signature;
+    return rdp;
+}
+
+Certificate_Format Makes_Certificate(std::string own_ip, std::string own_public_key, std::string t, std::string expires) {
+    Certificate_Format Certificate;
+    Certificate.own_ip = own_ip;
+    Certificate.own_public_key = own_public_key;
+    Certificate.t = t;
+    Certificate.expires = expires;
+    return Certificate;
+}
 
 int send_process(std::vector<uint8_t> buf) {
     int yes=1;
@@ -41,6 +68,8 @@ int send_process(std::vector<uint8_t> buf) {
 
     setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &yes, sizeof(yes));
 
+    std::cout << "Sending data of size: " << buf.size() << " bytes" << std::endl;
+
     if (sendto(sock, buf.data(), buf.size(), 0, reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr)) < 0) {
         perror("send failed");
         close(sock);
@@ -52,8 +81,17 @@ int send_process(std::vector<uint8_t> buf) {
     }
 }
 
+std::string certificate_to_string(const Certificate_Format& cert) {
+    std::ostringstream certStream;
+    certStream << cert.own_ip << "|\n"
+               << cert.own_public_key << "|\n"
+               << cert.t << "|\n"
+               << cert.expires;
+    return certStream.str();
+}
+
 // シリアライズ処理
-void serialize_data(const data_format& test_rdp, std::vector<uint8_t>& buf) {
+void serialize_data(const RDP_format& test_rdp, std::vector<uint8_t>& buf) {
     auto serialize_string = [&buf](const std::string& str) {
         std::uint32_t len = str.size();
         buf.push_back((len >> 0) & 0xFF);
@@ -64,8 +102,14 @@ void serialize_data(const data_format& test_rdp, std::vector<uint8_t>& buf) {
     };
 
     serialize_string(test_rdp.type);
+    serialize_string(test_rdp.source_ip);
     serialize_string(test_rdp.dest_ip);
-    serialize_string(test_rdp.cert);
+
+    // Certificate_Format のシリアライズ
+    serialize_string(test_rdp.cert.own_ip);
+    serialize_string(test_rdp.cert.own_public_key);
+    serialize_string(test_rdp.cert.t);
+    serialize_string(test_rdp.cert.expires);
 
     // nを4バイトにシリアライズ
     for (int i = 0; i < 4; i++) {
@@ -74,6 +118,64 @@ void serialize_data(const data_format& test_rdp, std::vector<uint8_t>& buf) {
 
     serialize_string(test_rdp.t);
     serialize_string(std::string(test_rdp.signature.begin(), test_rdp.signature.end()));
+
+    std::cout << "Serialized data size: " << buf.size() << " bytes" << std::endl;
+    std::cout << "Serialized data (hex): ";
+    for (unsigned char c : buf) {
+        std::cout << std::hex << (int)c << " ";
+    }
+    std::cout << std::dec << std::endl;
+}
+
+// デシリアライズ処理
+RDP_format deserialize_data(const std::vector<uint8_t>& buf) {
+    RDP_format deserialized_rdp;
+    std::size_t offset = 0;
+
+    // 汎用のデシリアライズ関数
+    auto deserialize_vector = [&buf, &offset]() {
+        if (offset + 4 > buf.size()) throw std::runtime_error("Buffer underflow while reading vector length");
+        std::uint32_t len = 0;
+        len |= buf[offset + 0] << 0;
+        len |= buf[offset + 1] << 8;
+        len |= buf[offset + 2] << 16;
+        len |= buf[offset + 3] << 24;
+        offset += 4;
+        if (offset + len > buf.size()) throw std::runtime_error("Buffer underflow while reading vector data");
+        std::vector<unsigned char> result(buf.begin() + offset, buf.begin() + offset + len);
+        offset += len;
+        return result;
+    };
+
+    // std::string を vector から変換するラッパー
+    auto deserialize_string = [&deserialize_vector]() {
+        std::vector<unsigned char> vec = deserialize_vector();
+        return std::string(vec.begin(), vec.end());
+    };
+
+    // データをデシリアライズ
+    deserialized_rdp.type = deserialize_string();
+    deserialized_rdp.dest_ip = deserialize_string();
+
+    // Certificate_Format のデシリアライズ
+    deserialized_rdp.cert.own_ip = deserialize_string();
+    deserialized_rdp.cert.own_public_key = deserialize_string();
+    deserialized_rdp.cert.t = deserialize_string();
+    deserialized_rdp.cert.expires = deserialize_string();
+
+    // n のデシリアライズ
+    if (offset + 4 > buf.size()) throw std::runtime_error("Buffer underflow while reading int32");
+    deserialized_rdp.n = 0;
+    deserialized_rdp.n |= buf[offset + 0] << 0;
+    deserialized_rdp.n |= buf[offset + 1] << 8;
+    deserialized_rdp.n |= buf[offset + 2] << 16;
+    deserialized_rdp.n |= buf[offset + 3] << 24;
+    offset += 4;
+
+    deserialized_rdp.t = deserialize_string();
+    deserialized_rdp.signature = deserialize_vector();
+
+    return deserialized_rdp;
 }
 
 // 秘密鍵を読み込む
@@ -98,6 +200,20 @@ EVP_PKEY* load_public_key(const std::string& filename) {
     EVP_PKEY* public_key = PEM_read_PUBKEY(file, nullptr, nullptr, nullptr);
     fclose(file);
     return public_key;
+}
+
+// 公開鍵をPEM形式の文字列に変換する関数
+std::string get_PublicKey_As_String(EVP_PKEY* pkey) {
+    BIO* bio = BIO_new(BIO_s_mem());
+    PEM_write_bio_PUBKEY(bio, pkey);
+
+    size_t pubKeyLen = BIO_pending(bio);
+    std::vector<char> pubKey(pubKeyLen + 1);
+    BIO_read(bio, pubKey.data(), pubKeyLen);
+    pubKey[pubKeyLen] = '\0';
+
+    BIO_free_all(bio);
+    return std::string(pubKey.data());
 }
 
 // 現在時刻の取得
@@ -143,7 +259,6 @@ std::string calculateExpirationTime(int durationHours, const std::string& format
     return timeStream.str();
 }
 
-
 std::string get_own_ip(const std::string& keyword = "wlan0") {
     struct ifaddrs *ifaddr, *ifa;
     char host[NI_MAXHOST];
@@ -173,41 +288,66 @@ std::string get_own_ip(const std::string& keyword = "wlan0") {
     return "";
 }
 
+// メッセージを構築する関数
+std::string construct_message(const RDP_format& deserialized_rdp) {
+    std::ostringstream messageStream;
+    messageStream << deserialized_rdp.type << "|\n"
+                  << deserialized_rdp.dest_ip << "|\n" 
+                  << certificate_to_string(deserialized_rdp.cert) << "|\n"
+                  << deserialized_rdp.n << "|\n"
+                  << deserialized_rdp.t << "|\n";
+    return messageStream.str();
+}
+
+// メッセージを構築する関数
+std::string construct_message_with_key(const RDP_format& deserialized_rdp, const std::string& public_key_str) {
+    std::ostringstream messageStream;
+    messageStream << deserialized_rdp.type << "|\n"
+                  << deserialized_rdp.dest_ip << "|\n" 
+                  << certificate_to_string(deserialized_rdp.cert) << "|\n"
+                  << deserialized_rdp.n << "|\n"
+                  << deserialized_rdp.t << "|\n"
+                  << public_key_str;  // 公開鍵を追加
+    std::cout << std::endl <<"---------------------------Message with public key---------------------------- " << std::endl;
+    std::cout << messageStream.str() << std::endl;
+    
+    return messageStream.str();
+}
+
 int main() {
+    RDP_format test_rdp1;
+    Certificate_Format test_cert1;
+
+    //公開鍵の取得
     EVP_PKEY* public_key = load_public_key("public_key.pem");
     if (!public_key) return 1;
 
+    //秘密鍵の取得
     EVP_PKEY* private_key = load_private_key("private_key.pem");
     if (!private_key) return 1;
 
     // 現在時刻の取得
-    std::string formattedTime = get_time();
+    std::string Formatted_Time = get_time();
+    
+    // 有効期限の取得
+    std::string expirationTime = calculateExpirationTime(24, Formatted_Time);
+    
+    // 送信元の公開鍵を取得して証明書を作成
+    test_cert1 = Makes_Certificate(get_own_ip(), get_PublicKey_As_String(public_key), Formatted_Time, expirationTime);
 
-    std::string expirationTime = calculateExpirationTime(24, formattedTime);
-
-    // 公開鍵を取得して証明書に含める
-    std::string publicKeyPEM = getPublicKey(public_key);
-    std::string cert_info =get_own_ip() + publicKeyPEM + "," + formattedTime + "," + expirationTime;
-
-    data_format test_rdp1 = {
+    test_rdp1 = Makes_RDP(
         "RDP",
         "10.0.0.1",
         "10.0.0.3",
-        cert_info,
+        test_cert1,
         std::random_device()(),
-        formattedTime,
+        Formatted_Time,
         expirationTime,
-    };
-
+        {}
+    );
+    
     // 署名対象メッセージを作成
-    std::ostringstream messageStream;
-    messageStream << test_rdp1.type << "|"
-                  << test_rdp1.dest_ip << "|"
-                  << test_rdp1.cert << "|"
-                  << test_rdp1.n << "|"
-                  << test_rdp1.t;
-    std::string message = messageStream.str();
-
+    std::string message = construct_message_with_key(test_rdp1, get_PublicKey_As_String(public_key));
     // 署名の生成
     test_rdp1.signature = signMessage(private_key, message);
     if (test_rdp1.signature.empty()) return -1;
@@ -217,7 +357,7 @@ int main() {
     serialize_data(test_rdp1, buf);
 
     if(send_process(buf)) {
-
+        std::cout << "Message sent successfully" << std::endl;
     }
 
     EVP_PKEY_free(private_key);

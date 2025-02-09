@@ -123,13 +123,12 @@ std::string decryptMessage(EVP_PKEY* pkey, const std::vector<unsigned char>& enc
 }
 
 // メッセージに署名を付与
+
 std::vector<unsigned char> signMessage(EVP_PKEY* privateKey, const std::string& message) {
     EVP_MD_CTX* ctx = EVP_MD_CTX_new();
     if (!ctx) {
         std::cerr << "署名コンテキストの作成に失敗しました。" << std::endl;
         return {};
-    } else {
-        std::cout << "generate signature" << std::endl;
     }
 
     if (EVP_DigestSignInit(ctx, NULL, EVP_sha256(), NULL, privateKey) <= 0) {
@@ -138,15 +137,21 @@ std::vector<unsigned char> signMessage(EVP_PKEY* privateKey, const std::string& 
         return {};
     }
 
+    if (EVP_DigestSignUpdate(ctx, message.data(), message.size()) <= 0) {
+        std::cerr << "署名の更新に失敗しました。" << std::endl;
+        EVP_MD_CTX_free(ctx);
+        return {};
+    }
+
     size_t sigLen;
-    if (EVP_DigestSign(ctx, NULL, &sigLen, reinterpret_cast<const unsigned char*>(message.c_str()), message.size()) <= 0) {
+    if (EVP_DigestSignFinal(ctx, NULL, &sigLen) <= 0) {
         std::cerr << "署名長の取得に失敗しました。" << std::endl;
         EVP_MD_CTX_free(ctx);
         return {};
-    } 
+    }
 
     std::vector<unsigned char> signature(sigLen);
-    if (EVP_DigestSign(ctx, signature.data(), &sigLen, reinterpret_cast<const unsigned char*>(message.c_str()), message.size()) <= 0) {
+    if (EVP_DigestSignFinal(ctx, signature.data(), &sigLen) <= 0) {
         std::cerr << "署名の生成に失敗しました。" << std::endl;
         EVP_MD_CTX_free(ctx);
         return {};
@@ -171,7 +176,13 @@ bool verifySignature(EVP_PKEY* publicKey, const std::string& message, const std:
         return false;
     }
 
-    int result = EVP_DigestVerify(ctx, signature.data(), signature.size(), reinterpret_cast<const unsigned char*>(message.c_str()), message.size());
+    if (EVP_DigestVerifyUpdate(ctx, message.data(), message.size()) <= 0) {
+        std::cerr << "検証の更新に失敗しました。" << std::endl;
+        EVP_MD_CTX_free(ctx);
+        return false;
+    }
+
+    int result = EVP_DigestVerifyFinal(ctx, signature.data(), signature.size());
     EVP_MD_CTX_free(ctx);
 
     if (result == 1) {
@@ -183,7 +194,6 @@ bool verifySignature(EVP_PKEY* publicKey, const std::string& message, const std:
     }
     return false;
 }
-
 
 /*
 署名生成及び検証用main関数
