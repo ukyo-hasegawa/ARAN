@@ -158,7 +158,21 @@ void serialize_data(const RDP_format& test_rdp, std::vector<uint8_t>& buf) {
     }
 
     serialize_string(test_rdp.t);
-    serialize_string(std::string(test_rdp.signature.begin(), test_rdp.signature.end()));
+
+    // 署名のシリアライズ
+    std::uint32_t sig_len = test_rdp.signature.size();
+    buf.push_back((sig_len >> 0) & 0xFF);
+    buf.push_back((sig_len >> 8) & 0xFF);
+    buf.push_back((sig_len >> 16) & 0xFF);
+    buf.push_back((sig_len >> 24) & 0xFF);
+    buf.insert(buf.end(), test_rdp.signature.begin(), test_rdp.signature.end());
+
+    std::cout << "Serialized data size: " << buf.size() << " bytes" << std::endl;
+    std::cout << "Serialized data (hex): ";
+    for (unsigned char c : buf) {
+        std::cout << std::hex << (int)c << " ";
+    }
+    std::cout << std::dec << std::endl;
 }
 
 std::vector<unsigned char> deserialize_vector(const std::vector<uint8_t>& buf, std::size_t& offset) {
@@ -249,22 +263,44 @@ RDP_format deserialize_data(const std::vector<uint8_t>& buf) {
     offset += 4;
 
     deserialized_rdp.t = deserialize_string();
-    deserialized_rdp.signature = std::vector<unsigned char>(buf.begin() + offset, buf.end());
+
+    // 署名のデシリアライズ
+    if (offset + 4 > buf.size()) throw std::runtime_error("Buffer underflow while reading signature length");
+    std::uint32_t sig_len = 0;
+    sig_len |= buf[offset + 0] << 0;
+    sig_len |= buf[offset + 1] << 8;
+    sig_len |= buf[offset + 2] << 16;
+    sig_len |= buf[offset + 3] << 24;
+    offset += 4;
+    if (offset + sig_len > buf.size()) throw std::runtime_error("Buffer underflow while reading signature data");
+    deserialized_rdp.signature = std::vector<unsigned char>(buf.begin() + offset, buf.begin() + offset + sig_len);
+    offset += sig_len;
 
     return deserialized_rdp;
 }
 
+std::string certificate_to_string(const Certificate_Format& cert) {
+    std::ostringstream certStream;
+    certStream << cert.own_ip << "|\n"
+               << cert.own_public_key << "|\n"
+               << cert.t << "|\n"
+               << cert.expires << "|\n";
+    return certStream.str();
+}
+
 // 署名付きメッセージをデシリアライズする関数
 std::pair<std::string, std::vector<unsigned char>> split_sign_message(const std::string& signed_message) {
-    std::istringstream messageStream(signed_message);
-    std::string message;
-    std::string signature_hex;
-    
-    std::cout << "---------------------------GET_LINE------------------------: " << std::endl;
+    std::string delimiter = "Message-with-public-key-end";
+    size_t pos = signed_message.find(delimiter);
+    if (pos == std::string::npos) {
+        throw std::runtime_error("Delimiter not found in signed message");
+    }
 
-    // メッセージ部分と署名部分を分割
-    std::getline(messageStream, message, '|');
-    std::getline(messageStream, signature_hex);
+    //メッセージ部分と署名部分を Message-with-public-key-end 分割
+    std::string message = signed_message.substr(0, pos+ delimiter.length());
+    std::string signature_hex = signed_message.substr(pos + delimiter.length());
+
+    std::cout << "--------------------------Splited message-------------------------\n" << message << std::endl;
 
     // 署名部分をバイト列に変換
     std::vector<unsigned char> signature;
@@ -287,16 +323,14 @@ std::pair<std::string, std::vector<unsigned char>> split_sign_message(const std:
     return {message, signature};
 }
 
+// メッセージを構築する関数
 std::string construct_message(const RDP_format& deserialized_rdp) {
     std::ostringstream messageStream;
-    messageStream << deserialized_rdp.type << "|"
-                  << deserialized_rdp.dest_ip << "|"
-                  << deserialized_rdp.cert.own_ip << "|"
-                  << deserialized_rdp.cert.own_public_key << "|"
-                  << deserialized_rdp.cert.t << "|"
-                  << deserialized_rdp.cert.expires << "|"
-                  << deserialized_rdp.n << "|"
-                  << deserialized_rdp.t;
+    messageStream << deserialized_rdp.type << "|\n"
+                  << deserialized_rdp.dest_ip << "|\n" 
+                  << certificate_to_string(deserialized_rdp.cert) << "|\n"
+                  << deserialized_rdp.n << "|\n"
+                  << deserialized_rdp.t << "|\n";
     return messageStream.str();
 }
 
@@ -305,14 +339,11 @@ std::string construct_message_with_key(const RDP_format& deserialized_rdp, const
     std::ostringstream messageStream;
     messageStream << deserialized_rdp.type << "|\n"
                   << deserialized_rdp.dest_ip << "|\n" 
-                  << deserialized_rdp.cert.own_ip << "|\n"
-                  << deserialized_rdp.cert.own_public_key << "|\n"
-                  << deserialized_rdp.cert.t << "|\n"
-                  << deserialized_rdp.cert.expires << "|\n"
-                  << deserialized_rdp.n << "|\n"
+                  << certificate_to_string(deserialized_rdp.cert) << "|\n"<< deserialized_rdp.n << "|\n"
                   << deserialized_rdp.t << "|\n"
-                  << public_key_str;  // 公開鍵を追加
-    std::cout << std::endl <<"---------------------------Message with public key---------------------------- " << std::endl;
+                  << public_key_str  // 公開鍵を追加
+                  << "Message-with-public-key-end\n"; 
+
     std::cout << messageStream.str() << std::endl;
     
     return messageStream.str();
@@ -385,6 +416,76 @@ RDP_format Makes_REP(std::string type, std::string source_ip, std::string dest_i
     return rdp;
 }
 
+std::vector<unsigned char> signMessage(EVP_PKEY* private_key, const std::string& message) {
+    std::vector<unsigned char> signature;
+    EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+    if (!ctx) {
+        std::cerr << "Failed to create EVP_MD_CTX" << std::endl;
+        return signature;
+    }
+
+    if (EVP_DigestSignInit(ctx, nullptr, EVP_sha256(), nullptr, private_key) <= 0) {
+        std::cerr << "EVP_DigestSignInit failed" << std::endl;
+        EVP_MD_CTX_free(ctx);
+        return signature;
+    }
+
+    if (EVP_DigestSignUpdate(ctx, message.c_str(), message.size()) <= 0) {
+        std::cerr << "EVP_DigestSignUpdate failed" << std::endl;
+        EVP_MD_CTX_free(ctx);
+        return signature;
+    }
+
+    size_t siglen = 0;
+    if (EVP_DigestSignFinal(ctx, nullptr, &siglen) <= 0) {
+        std::cerr << "EVP_DigestSignFinal (get length) failed" << std::endl;
+        EVP_MD_CTX_free(ctx);
+        return signature;
+    }
+
+    signature.resize(siglen);
+    if (EVP_DigestSignFinal(ctx, signature.data(), &siglen) <= 0) {
+        std::cerr << "EVP_DigestSignFinal (sign) failed" << std::endl;
+        EVP_MD_CTX_free(ctx);
+        return signature;
+    }
+
+    EVP_MD_CTX_free(ctx);
+    return signature;
+}
+
+bool verifySignature(EVP_PKEY* public_key, const std::string& message, const std::vector<unsigned char>& signature) {
+    EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+    if (!ctx) {
+        std::cerr << "Failed to create EVP_MD_CTX" << std::endl;
+        return false;
+    }
+
+    if (EVP_DigestVerifyInit(ctx, nullptr, EVP_sha256(), nullptr, public_key) <= 0) {
+        std::cerr << "EVP_DigestVerifyInit failed" << std::endl;
+        EVP_MD_CTX_free(ctx);
+        return false;
+    }
+
+    if (EVP_DigestVerifyUpdate(ctx, message.c_str(), message.size()) <= 0) {
+        std::cerr << "EVP_DigestVerifyUpdate failed" << std::endl;
+        EVP_MD_CTX_free(ctx);
+        return false;
+    }
+
+    int result = EVP_DigestVerifyFinal(ctx, signature.data(), signature.size());
+    EVP_MD_CTX_free(ctx);
+
+    if (result == 1) {
+        return true; // 署名が正しい
+    } else if (result == 0) {
+        return false; // 署名が正しくない
+    } else {
+        std::cerr << "EVP_DigestVerifyFinal failed" << std::endl;
+        return false;
+    }
+}
+
 int main() {
     RDP_format rdp;
     // ブロードキャスト受信の設定
@@ -432,6 +533,7 @@ int main() {
 
     //デシリアライズ処理
     try {
+        std::cout << "-------------------------------------Deserialization check-------------------------------------" << std::endl;
         RDP_format deserialized_rdp = deserialize_data(recv_buf);
         std::cout << "deserialize_rdp.type:" << deserialized_rdp.type << std::endl;
         std::cout << "deserialize_rdp.source_ip:" << deserialized_rdp.source_ip << std::endl;
@@ -448,16 +550,20 @@ int main() {
         }
         std::cout << std::dec << std::endl;
 
-        // 送信側と同じ `message` を構築
         std::string message = construct_message(deserialized_rdp);
         std::cout << "-------------------------------------Message-------------------------------------: " << std::endl;
         std::cout << message << std::endl;
         std::cout << "-------------------------------------Message-End-------------------------------------: " << std::endl;
 
-        // 署名の検証
         bool isValid = verifySignature(public_key, message, deserialized_rdp.signature);
         std::cout << "-------------------------------------Signature verification-------------------------------------: " << std::endl;
         std::cout << (isValid ? "success" : "false") << std::endl;
+
+        std::cout << "-------------------------------------Signature-------------------------------------: " << std::endl;
+        for (unsigned char c : deserialized_rdp.signature) {
+            std::cout << std::hex << (int)c << " ";
+        }
+        std::cout << std::dec << std::endl;
 
         // 宛先IP を取得
         dest_ip = deserialized_rdp.dest_ip;

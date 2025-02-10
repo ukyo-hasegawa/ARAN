@@ -86,7 +86,7 @@ std::string certificate_to_string(const Certificate_Format& cert) {
     certStream << cert.own_ip << "|\n"
                << cert.own_public_key << "|\n"
                << cert.t << "|\n"
-               << cert.expires;
+               << cert.expires << "|\n";
     return certStream.str();
 }
 
@@ -117,7 +117,14 @@ void serialize_data(const RDP_format& test_rdp, std::vector<uint8_t>& buf) {
     }
 
     serialize_string(test_rdp.t);
-    serialize_string(std::string(test_rdp.signature.begin(), test_rdp.signature.end()));
+
+    // 署名のシリアライズ
+    std::uint32_t sig_len = test_rdp.signature.size();
+    buf.push_back((sig_len >> 0) & 0xFF);
+    buf.push_back((sig_len >> 8) & 0xFF);
+    buf.push_back((sig_len >> 16) & 0xFF);
+    buf.push_back((sig_len >> 24) & 0xFF);
+    buf.insert(buf.end(), test_rdp.signature.begin(), test_rdp.signature.end());
 
     std::cout << "Serialized data size: " << buf.size() << " bytes" << std::endl;
     std::cout << "Serialized data (hex): ";
@@ -304,14 +311,52 @@ std::string construct_message_with_key(const RDP_format& deserialized_rdp, const
     std::ostringstream messageStream;
     messageStream << deserialized_rdp.type << "|\n"
                   << deserialized_rdp.dest_ip << "|\n" 
-                  << certificate_to_string(deserialized_rdp.cert) << "|\n"
-                  << deserialized_rdp.n << "|\n"
+                  << certificate_to_string(deserialized_rdp.cert) << "|\n"<< deserialized_rdp.n << "|\n"
                   << deserialized_rdp.t << "|\n"
-                  << public_key_str;  // 公開鍵を追加
-    std::cout << std::endl <<"---------------------------Message with public key---------------------------- " << std::endl;
+                  << public_key_str  // 公開鍵を追加
+                  << "Message-with-public-key-end\n"; 
+
     std::cout << messageStream.str() << std::endl;
     
     return messageStream.str();
+}
+
+std::vector<unsigned char> signMessage(EVP_PKEY* private_key, const std::string& message) {
+    std::vector<unsigned char> signature;
+    EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+    if (!ctx) {
+        std::cerr << "Failed to create EVP_MD_CTX" << std::endl;
+        return signature;
+    }
+
+    if (EVP_DigestSignInit(ctx, nullptr, EVP_sha256(), nullptr, private_key) <= 0) {
+        std::cerr << "EVP_DigestSignInit failed" << std::endl;
+        EVP_MD_CTX_free(ctx);
+        return signature;
+    }
+
+    if (EVP_DigestSignUpdate(ctx, message.c_str(), message.size()) <= 0) {
+        std::cerr << "EVP_DigestSignUpdate failed" << std::endl;
+        EVP_MD_CTX_free(ctx);
+        return signature;
+    }
+
+    size_t siglen = 0;
+    if (EVP_DigestSignFinal(ctx, nullptr, &siglen) <= 0) {
+        std::cerr << "EVP_DigestSignFinal (get length) failed" << std::endl;
+        EVP_MD_CTX_free(ctx);
+        return signature;
+    }
+
+    signature.resize(siglen);
+    if (EVP_DigestSignFinal(ctx, signature.data(), &siglen) <= 0) {
+        std::cerr << "EVP_DigestSignFinal (sign) failed" << std::endl;
+        EVP_MD_CTX_free(ctx);
+        return signature;
+    }
+
+    EVP_MD_CTX_free(ctx);
+    return signature;
 }
 
 int main() {
@@ -333,7 +378,12 @@ int main() {
     std::string expirationTime = calculateExpirationTime(24, Formatted_Time);
     
     // 送信元の公開鍵を取得して証明書を作成
-    test_cert1 = Makes_Certificate(get_own_ip(), get_PublicKey_As_String(public_key), Formatted_Time, expirationTime);
+    test_cert1 = Makes_Certificate(
+        get_own_ip(), 
+        get_PublicKey_As_String(public_key), 
+        Formatted_Time, 
+        expirationTime
+    );
 
     test_rdp1 = Makes_RDP(
         "RDP",
@@ -347,10 +397,19 @@ int main() {
     );
     
     // 署名対象メッセージを作成
-    std::string message = construct_message_with_key(test_rdp1, get_PublicKey_As_String(public_key));
-    // 署名の生成
+    std::string message = construct_message(test_rdp1);
+    std::cout << "-------------------------------------Message-------------------------------------: " << std::endl;
+    std::cout << message << std::endl;
+    std::cout << "-------------------------------------Message-End-------------------------------------: " << std::endl;
+
     test_rdp1.signature = signMessage(private_key, message);
     if (test_rdp1.signature.empty()) return -1;
+
+    std::cout << "-------------------------------------Signature-------------------------------------: " << std::endl;
+    for (unsigned char c : test_rdp1.signature) {
+        std::cout << std::hex << (int)c << " ";
+    }
+    std::cout << std::dec << std::endl;
 
     // シリアライズ処理
     std::vector<uint8_t> buf;
