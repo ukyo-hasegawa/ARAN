@@ -15,6 +15,7 @@
 #include <netdb.h>
 #include <unistd.h>
 #include "RSA/RSA.h"
+#include <tuple>
 
 struct Certificate_Format {
     std::string own_ip;
@@ -289,38 +290,41 @@ std::string certificate_to_string(const Certificate_Format& cert) {
 }
 
 // 署名付きメッセージをデシリアライズする関数
-std::pair<std::string, std::vector<unsigned char>> split_sign_message(const std::string& signed_message) {
+std::tuple<std::string, std::vector<unsigned char>, std::string> split_sign_message(const std::string& signed_message) {
     std::string delimiter = "Message-with-public-key-end";
     size_t pos = signed_message.find(delimiter);
     if (pos == std::string::npos) {
         throw std::runtime_error("Delimiter not found in signed message");
     }
 
-    //メッセージ部分と署名部分を Message-with-public-key-end 分割
-    std::string message = signed_message.substr(0, pos+ delimiter.length());
-    std::string signature_hex = signed_message.substr(pos + delimiter.length());
+    // メッセージ部分と署名部分を分割
+    std::string message = signed_message.substr(0, pos + delimiter.length());
+    std::string signature_and_ip = signed_message.substr(pos + delimiter.length());
 
-    std::cout << "--------------------------Splited message-------------------------\n" << message << std::endl;
+    std::string receiver_delimiter = "receiver-signature-and-certificate";
+    size_t receiver_pos = signature_and_ip.find(receiver_delimiter);
+    if (receiver_pos == std::string::npos) {
+        throw std::runtime_error("Delimiter not found in signed message");
+    }
+
+    // 署名部分と証明書部分を分割
+    std::string receiver_splited_signature = signature_and_ip.substr(0, receiver_pos);
+    std::string receiver_splited_certificate = signature_and_ip.substr(receiver_pos + receiver_delimiter.length());
 
     // 署名部分をバイト列に変換
     std::vector<unsigned char> signature;
-    for (size_t i = 0; i < signature_hex.length(); i += 2) {
-        std::string byteString = signature_hex.substr(i, 2);
-        unsigned char byte = static_cast<unsigned char>(std::stoi(byteString, nullptr, 16));
-        signature.push_back(byte);
+    for (size_t i = 0; i < receiver_splited_signature.length(); i += 2) {
+        std::string byteString = receiver_splited_signature.substr(i, 2);
+        try {
+            unsigned char byte = static_cast<unsigned char>(std::stoi(byteString, nullptr, 16));
+            signature.push_back(byte);
+        } catch (const std::exception& e) {
+            std::cerr << "Error converting hex to byte: " << e.what() << std::endl;
+            throw;
+        }
     }
 
-    // 署名部分を出力
-    std::cout << "---------------------------ORIGINAL_SIGNATURE------------------------: ";
-    for (unsigned char c : signature) {
-        std::cout << std::hex << (int)c << " ";
-    }
-    std::cout << std::dec << std::endl;
-
-    // 署名部分を破棄
-    signature.clear();
-
-    return {message, signature};
+    return {message, signature, receiver_splited_certificate};
 }
 
 // メッセージを構築する関数
@@ -344,7 +348,7 @@ std::string construct_message_with_key(const RDP_format& deserialized_rdp, const
                   << public_key_str  // 公開鍵を追加
                   << "Message-with-public-key-end\n"; 
 
-    std::cout << messageStream.str() << std::endl;
+    //std::cout << messageStream.str() << std::endl;
     
     return messageStream.str();
 }
@@ -414,6 +418,16 @@ RDP_format Makes_REP(std::string type, std::string source_ip, std::string dest_i
     rdp.t = t;
     rdp.signature = signature;
     return rdp;
+}
+
+
+Certificate_Format Makes_Certificate(std::string own_ip, std::string own_public_key, std::string t, std::string expires) {
+    Certificate_Format Certificate;
+    Certificate.own_ip = own_ip;
+    Certificate.own_public_key = own_public_key;
+    Certificate.t = t;
+    Certificate.expires = expires;
+    return Certificate;
 }
 
 std::vector<unsigned char> signMessage(EVP_PKEY* private_key, const std::string& message) {
@@ -549,6 +563,8 @@ int main() {
             std::cout << std::hex << (int)c << " ";
         }
         std::cout << std::dec << std::endl;
+        std::cout << "-------------------------------------Deserialization check end-------------------------------------" << std::endl;
+        
 
         std::string message = construct_message(deserialized_rdp);
         std::cout << "-------------------------------------Message-------------------------------------: " << std::endl;
@@ -564,7 +580,8 @@ int main() {
             std::cout << std::hex << (int)c << " ";
         }
         std::cout << std::dec << std::endl;
-
+        std::cout << "-------------------------------------Signature end-------------------------------------: " << std::endl;
+        
         // 宛先IP を取得
         dest_ip = deserialized_rdp.dest_ip;
         std::cout << "Destination IP (deserialized_rdp.dest_ip): " << dest_ip << std::endl;
@@ -589,20 +606,49 @@ int main() {
         //送信元からのRDP処理→署名を全体に対して付与　後から関数化
         //転送端末の秘密鍵による署名の生成
         //送信元端末の公開鍵を含むmessageの生成
-        std::cout << "------------------------------check point 2------------------------------" << std::endl;
+        //std::cout << "------------------------------check point 2------------------------------" << std::endl;
         std::string message_with_key = construct_message_with_key(deserialized_rdp, get_PublicKey_As_String(public_key));
-        std::cout << "---------------------------Message with key--------------------------- "<< std::endl << message_with_key << std::endl;
+        std::cout << "---------------------------Message with key--------------------------- "<< std::endl;
+        std::cout << message_with_key << std::endl;
+        std::cout << "---------------------------Message with key end--------------------------- "<< std::endl;
+        //署名処理(受信端末による署名)
         std::vector<unsigned char> signature = signMessage(load_private_key("private_key.pem"), message_with_key);
         if (signature.empty()) return -1;
 
-        std::cout << "---------------------------Message with key end--------------------------- "<< std::endl << message_with_key << std::endl;
+        // 署名を16進数文字列に変換してメッセージに追加
+        std::ostringstream signature_hex_stream;
+        for (unsigned char c : signature) {
+            signature_hex_stream << std::hex << std::setw(2) << std::setfill('0') << (int)c;
+        }
+        std::string signature_hex = signature_hex_stream.str();
+        std::cout << "Signature hex length: " << signature_hex.length() << std::endl; // 追加
+        std::string message_with_key_and_signature = message_with_key + signature_hex;
 
+        // 署名を追加したメッセージを出力
+        std::cout << "---------------------------Message with key and signature--------------------------- "<< std::endl;
+        std::cout << message_with_key_and_signature << std::endl;
+        std::cout << "---------------------------Message with key and signature end--------------------------- "<< std::endl;
+        
+        //受信端末の証明書の作成
+        Certificate_Format receiver_certificate = Makes_Certificate(get_own_ip(), get_PublicKey_As_String(public_key), get_time(), calculateExpirationTime(24, get_time()));
+
+        //受信した端末の証明書を作成して追加
+        std::string receiver_certificate_string = certificate_to_string(receiver_certificate);
+        std::string message_with_key_and_signature_and_certificate = message_with_key_and_signature + "receiver-signature-and-certificate" + receiver_certificate_string; ;
+
+        // 署名を追加したメッセージを出力
+        std::cout << "---------------------------Message with key and signature and certificate--------------------------- "<< std::endl;
+        std::cout << message_with_key_and_signature_and_certificate << std::endl;
+        std::cout << "---------------------------Message with key and signature and certificate end--------------------------- "<< std::endl;
+        
         //転送端末からのRDPメッセージ受信時のRDPの作成
         //署名と共に受信したメッセージを分割
-        auto [extracted_message, extracted_signature] = split_sign_message(message_with_key);
+        auto [extracted_message, extracted_signature, extracted_certificate] = split_sign_message(message_with_key_and_signature_and_certificate);
 
-        std::cout << "Message without signature: " << extracted_message << std::endl;
+        std::cout << "---------------------------Message without signature--------------------------------"<< std::endl;
+        std::cout << extracted_message << std::endl;
 
+        
         //rdp = Makes_RDP(deserialized_rdp.type, get_own_ip(), deserialized_rdp.dest_ip, cert_info, deserialized_rdp.n, deserialized_rdp.t, deserialized_rdp.cert.expires, signature);
         //serialize_data(rdp,recv_buf);
 
