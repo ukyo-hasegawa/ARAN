@@ -1,1 +1,1 @@
-xterm -n sta1 && xterm -n sta2 && xterm -n sta3 
+xterm -n sta1 && xterm -n sta2 && xterm -n sta3 && xterm -n sta4

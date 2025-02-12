@@ -34,8 +34,20 @@ struct RDP_format {
     std::vector<unsigned char> signature;
 };
 
-RDP_format Makes_RDP(std::string type, std::string own_ip, std::string dest_ip, Certificate_Format cert, std::uint32_t n, std::string t, std::string expires, std::vector<unsigned char> signature) {
-    RDP_format rdp;
+struct Forwarding_RDP_format {
+    std::string type;
+    std::string source_ip;
+    std::string dest_ip;
+    Certificate_Format cert;
+    std::uint32_t n;
+    std::string t;
+    std::vector<unsigned char> signature;
+    std::vector<unsigned char> receiver_signature;
+    Certificate_Format receiver_cert;
+};
+
+Forwarding_RDP_format Makes_RDP(std::string type, std::string own_ip, std::string dest_ip, Certificate_Format cert, std::uint32_t n, std::string t, std::string expires, std::vector<unsigned char> signature, std::vector<unsigned char> receiver_signature, Certificate_Format receiver_cert) {
+    Forwarding_RDP_format rdp;
     rdp.type = type;
     rdp.source_ip = own_ip;
     rdp.dest_ip = dest_ip;
@@ -128,6 +140,64 @@ void serialize_data(const RDP_format& test_rdp, std::vector<uint8_t>& buf) {
 
     std::cout << "Serialized data size: " << buf.size() << " bytes" << std::endl;
     std::cout << "Serialized data (hex): ";
+    for (unsigned char c : buf) {
+        std::cout << std::hex << (int)c << " ";
+    }
+    std::cout << std::dec << std::endl;
+}
+
+// Forwarding_RDP_format のシリアライズ処理
+void serialize_forwarding_data(const Forwarding_RDP_format& forwarding_rdp, std::vector<uint8_t>& buf) {
+    auto serialize_string = [&buf](const std::string& str) {
+        std::uint32_t len = str.size();
+        buf.push_back((len >> 0) & 0xFF);
+        buf.push_back((len >> 8) & 0xFF);
+        buf.push_back((len >> 16) & 0xFF);
+        buf.push_back((len >> 24) & 0xFF);
+        buf.insert(buf.end(), str.begin(), str.end());
+    };
+
+    serialize_string(forwarding_rdp.type);
+    serialize_string(forwarding_rdp.source_ip);
+    serialize_string(forwarding_rdp.dest_ip);
+
+    // Certificate_Format のシリアライズ
+    serialize_string(forwarding_rdp.cert.own_ip);
+    serialize_string(forwarding_rdp.cert.own_public_key);
+    serialize_string(forwarding_rdp.cert.t);
+    serialize_string(forwarding_rdp.cert.expires);
+
+    // nを4バイトにシリアライズ
+    for (int i = 0; i < 4; i++) {
+        buf.push_back((forwarding_rdp.n >> (8 * i)) & 0xFF);
+    }
+
+    serialize_string(forwarding_rdp.t);
+
+    // 署名のシリアライズ
+    std::uint32_t sig_len = forwarding_rdp.signature.size();
+    buf.push_back((sig_len >> 0) & 0xFF);
+    buf.push_back((sig_len >> 8) & 0xFF);
+    buf.push_back((sig_len >> 16) & 0xFF);
+    buf.push_back((sig_len >> 24) & 0xFF);
+    buf.insert(buf.end(), forwarding_rdp.signature.begin(), forwarding_rdp.signature.end());
+
+    // receiver_signature のシリアライズ
+    std::uint32_t receiver_sig_len = forwarding_rdp.receiver_signature.size();
+    buf.push_back((receiver_sig_len >> 0) & 0xFF);
+    buf.push_back((receiver_sig_len >> 8) & 0xFF);
+    buf.push_back((receiver_sig_len >> 16) & 0xFF);
+    buf.push_back((receiver_sig_len >> 24) & 0xFF);
+    buf.insert(buf.end(), forwarding_rdp.receiver_signature.begin(), forwarding_rdp.receiver_signature.end());
+
+    // receiver_cert のシリアライズ
+    serialize_string(forwarding_rdp.receiver_cert.own_ip);
+    serialize_string(forwarding_rdp.receiver_cert.own_public_key);
+    serialize_string(forwarding_rdp.receiver_cert.t);
+    serialize_string(forwarding_rdp.receiver_cert.expires);
+
+    std::cout << "Serialized forwarding data size: " << buf.size() << " bytes" << std::endl;
+    std::cout << "Serialized forwarding data (hex): ";
     for (unsigned char c : buf) {
         std::cout << std::hex << (int)c << " ";
     }
@@ -296,7 +366,7 @@ std::string get_own_ip(const std::string& keyword = "wlan0") {
 }
 
 // メッセージを構築する関数
-std::string construct_message(const RDP_format& deserialized_rdp) {
+std::string construct_message(const Forwarding_RDP_format& deserialized_rdp) {
     std::ostringstream messageStream;
     messageStream << deserialized_rdp.type << "|\n"
                   << deserialized_rdp.dest_ip << "|\n" 
@@ -360,14 +430,14 @@ std::vector<unsigned char> signMessage(EVP_PKEY* private_key, const std::string&
 }
 
 int main() {
-    RDP_format test_rdp1;
+    Forwarding_RDP_format test_rdp1;
     Certificate_Format test_cert1;
 
-    //公開鍵の取得
+    // 公開鍵の取得
     EVP_PKEY* public_key = load_public_key("public_key.pem");
     if (!public_key) return 1;
 
-    //秘密鍵の取得
+    // 秘密鍵の取得
     EVP_PKEY* private_key = load_private_key("private_key.pem");
     if (!private_key) return 1;
 
@@ -388,11 +458,13 @@ int main() {
     test_rdp1 = Makes_RDP(
         "RDP",
         "10.0.0.1",
-        "10.0.0.3",
+        "10.0.0.4",
         test_cert1,
         std::random_device()(),
         Formatted_Time,
         expirationTime,
+        {},
+        {},
         {}
     );
     
@@ -413,7 +485,7 @@ int main() {
 
     // シリアライズ処理
     std::vector<uint8_t> buf;
-    serialize_data(test_rdp1, buf);
+    serialize_forwarding_data(test_rdp1, buf);
 
     if(send_process(buf)) {
         std::cout << "Message sent successfully" << std::endl;
