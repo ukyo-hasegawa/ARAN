@@ -554,8 +554,8 @@ RDP_format Makes_RDP(std::string type, std::string source_ip, std::string dest_i
     return rdp;
 }
 
-RDP_format Makes_REP(std::string type, std::string source_ip, std::string dest_ip, Certificate_Format cert, std::uint32_t n, std::string t, std::vector<unsigned char> signature) {
-    RDP_format rdp;
+Forwarding_RDP_format Makes_REP(std::string type, std::string source_ip, std::string dest_ip, Certificate_Format cert, std::uint32_t n, std::string t, std::vector<unsigned char> signature, std::vector<unsigned char> receiver_signature, Certificate_Format receiver_cert) {
+    Forwarding_RDP_format rdp;
     rdp.type = type;
     rdp.source_ip = source_ip;
     rdp.dest_ip = dest_ip;
@@ -563,6 +563,9 @@ RDP_format Makes_REP(std::string type, std::string source_ip, std::string dest_i
     rdp.n = n;
     rdp.t = t;
     rdp.signature = signature;
+    rdp.receiver_signature = receiver_signature;
+    rdp.receiver_cert = receiver_cert;
+
     return rdp;
 }
 
@@ -779,6 +782,33 @@ int main() {
         if (deserialized_rdp.dest_ip == ip_address) {
             std::cout << "This message is for me." << std::endl;
             //REPの作成
+
+            std::cout << "-------------------------------------REP-------------------------------------" << std::endl;
+            Forwarding_RDP_format rep = Makes_REP("REP", deserialized_rdp.dest_ip, deserialized_rdp.source_ip, deserialized_rdp.cert, deserialized_rdp.n, get_time(), deserialized_rdp.signature , {}, {});
+            
+            // REPをシリアライズ
+            std::vector<uint8_t> rep_buf;
+            serialize_forwarding_data(rep, rep_buf);
+
+            // REPを送信(宛先は一つ前の端末に向けて送信)
+            struct sockaddr_in rep_addr;
+            rep_addr.sin_family = AF_INET;
+            rep_addr.sin_port = htons(12345);
+            rep_addr.sin_addr.s_addr = inet_addr(sender_ip.c_str());
+
+            int rep_sock = socket(AF_INET, SOCK_DGRAM, 0);
+            if (rep_sock < 0) {
+                std::cerr << "Failed to create socket for REP" << std::endl;
+            }
+
+            if (sendto(rep_sock, rep_buf.data(), rep_buf.size(), 0, reinterpret_cast<struct sockaddr*>(&rep_addr), sizeof(rep_addr)) < 0) {
+                perror("sendto failed for REP");
+            } else {
+                std::cout << "REP sent successfully to " << deserialized_rdp.source_ip << std::endl;
+            }
+
+            close(rep_sock);
+
         } else {
             std::cout << "This message is not for me. Forwarding..." << std::endl;
 
@@ -814,6 +844,7 @@ int main() {
             // 自身の署名と証明書を追加して送信
             sign_and_forward(deserialized_rdp, private_key, public_key);
         }
+        //一つ前の端末に向けて送信する(とりあえずここで放置した)
 
     } catch (const std::exception& e) {
         std::cerr << "Error during deserialization: " << e.what() << std::endl;
