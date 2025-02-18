@@ -951,7 +951,6 @@ int main() {
                     if (signature.empty()) {
                         std::cerr << "Failed to sign the message" << std::endl;
                         return;
-                        
                     }
                     deserialized_rdp.receiver_signature = signature;
                 
@@ -961,7 +960,7 @@ int main() {
                     deserialized_rdp.receiver_cert = forwarder_certificate;
                     // Forwarding_RDP_format をシリアライズ
                     serialize_data(deserialized_rdp, send_buf);
-                    //REPならユニキャスト転送する
+                    //REPならユニキャスト転送する, next_ipは一つ前の端末のIPアドレスで設定する必要がある
                     unicast_send_process(send_buf, next_ip);
 
                     
