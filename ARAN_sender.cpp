@@ -139,11 +139,13 @@ void serialize_data(const RDP_format& test_rdp, std::vector<uint8_t>& buf) {
     buf.insert(buf.end(), test_rdp.signature.begin(), test_rdp.signature.end());
 
     std::cout << "Serialized data size: " << buf.size() << " bytes" << std::endl;
+    /*
     std::cout << "Serialized data (hex): ";
     for (unsigned char c : buf) {
         std::cout << std::hex << (int)c << " ";
     }
     std::cout << std::dec << std::endl;
+    */
 }
 
 // Forwarding_RDP_format のシリアライズ処理
@@ -197,11 +199,13 @@ void serialize_forwarding_data(const Forwarding_RDP_format& forwarding_rdp, std:
     serialize_string(forwarding_rdp.receiver_cert.expires);
 
     std::cout << "Serialized forwarding data size: " << buf.size() << " bytes" << std::endl;
+    /*
     std::cout << "Serialized forwarding data (hex): ";
     for (unsigned char c : buf) {
         std::cout << std::hex << (int)c << " ";
     }
     std::cout << std::dec << std::endl;
+    */
 }
 
 // デシリアライズ処理
