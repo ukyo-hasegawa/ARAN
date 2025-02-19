@@ -48,6 +48,19 @@ struct Forwarding_RDP_format {
     Certificate_Format receiver_cert;
 };
 
+struct Forwarding_REP_format {
+    std::string type;
+    //std::string source_ip;
+    std::string dest_ip;
+    Certificate_Format cert;
+    std::uint32_t n;
+    std::string t;
+    std::vector<unsigned char> signature;
+    std::vector<unsigned char> receiver_signature;
+    Certificate_Format receiver_cert;
+};
+
+
 
 std::string get_own_ip(const std::string& keyword = "wlan0") {
     struct ifaddrs *ifaddr, *ifa;
@@ -277,6 +290,63 @@ void serialize_data(const Forwarding_RDP_format& forwarding_rdp, std::vector<uin
     }
     std::cout << std::dec << std::endl;
     */
+}
+
+// Forwarding_REP_format のシリアライズ処理
+void REP_serialize_data(const Forwarding_REP_format& forwarding_rep, std::vector<uint8_t>& buf) {
+    auto serialize_string = [&buf](const std::string& str) {
+        std::uint32_t len = str.size();
+        buf.push_back((len >> 0) & 0xFF);
+        buf.push_back((len >> 8) & 0xFF);
+        buf.push_back((len >> 16) & 0xFF);
+        buf.push_back((len >> 24) & 0xFF);
+        buf.insert(buf.end(), str.begin(), str.end());
+    };
+
+    serialize_string(forwarding_rep.type);
+    serialize_string(forwarding_rep.dest_ip);
+
+    // Certificate_Format のシリアライズ
+    serialize_string(forwarding_rep.cert.own_ip);
+    serialize_string(forwarding_rep.cert.own_public_key);
+    serialize_string(forwarding_rep.cert.t);
+    serialize_string(forwarding_rep.cert.expires);
+
+    // nを4バイトにシリアライズ
+    for (int i = 0; i < 4; i++) {
+        buf.push_back((forwarding_rep.n >> (8 * i)) & 0xFF);
+    }
+
+    serialize_string(forwarding_rep.t);
+
+    // 署名のシリアライズ
+    std::uint32_t sig_len = forwarding_rep.signature.size();
+    buf.push_back((sig_len >> 0) & 0xFF);
+    buf.push_back((sig_len >> 8) & 0xFF);
+    buf.push_back((sig_len >> 16) & 0xFF);
+    buf.push_back((sig_len >> 24) & 0xFF);
+    buf.insert(buf.end(), forwarding_rep.signature.begin(), forwarding_rep.signature.end());
+
+    // receiver_signature のシリアライズ
+    std::uint32_t receiver_sig_len = forwarding_rep.receiver_signature.size();
+    buf.push_back((receiver_sig_len >> 0) & 0xFF);
+    buf.push_back((receiver_sig_len >> 8) & 0xFF);
+    buf.push_back((receiver_sig_len >> 16) & 0xFF);
+    buf.push_back((receiver_sig_len >> 24) & 0xFF);
+    buf.insert(buf.end(), forwarding_rep.receiver_signature.begin(), forwarding_rep.receiver_signature.end());
+
+    // receiver_cert のシリアライズ
+    serialize_string(forwarding_rep.receiver_cert.own_ip);
+    serialize_string(forwarding_rep.receiver_cert.own_public_key);
+    serialize_string(forwarding_rep.receiver_cert.t);
+    serialize_string(forwarding_rep.receiver_cert.expires);
+
+    std::cout << "Serialized REP data size: " << buf.size() << " bytes" << std::endl;
+    std::cout << "Serialized REP data (hex): ";
+    for (unsigned char c : buf) {
+        std::cout << std::hex << (int)c << " ";
+    }
+    std::cout << std::dec << std::endl;
 }
 
 std::vector<unsigned char> deserialize_vector(const std::vector<uint8_t>& buf, std::size_t& offset) {
@@ -584,10 +654,9 @@ RDP_format Makes_RDP(std::string type, std::string source_ip, std::string dest_i
     return rdp;
 }
 
-Forwarding_RDP_format Makes_REP(std::string type, std::string source_ip, std::string dest_ip, Certificate_Format cert, std::uint32_t n, std::string t, std::vector<unsigned char> signature, std::vector<unsigned char> receiver_signature, Certificate_Format receiver_cert) {
-    Forwarding_RDP_format rdp;
+Forwarding_REP_format Makes_REP(std::string type, std::string dest_ip, Certificate_Format cert, std::uint32_t n, std::string t, std::vector<unsigned char> signature, std::vector<unsigned char> receiver_signature, Certificate_Format receiver_cert) {
+    Forwarding_REP_format rdp;
     rdp.type = type;
-    rdp.source_ip = source_ip;
     rdp.dest_ip = dest_ip;
     rdp.cert = cert;
     rdp.n = n;
@@ -721,11 +790,73 @@ std::tuple<std::string, std::string, std::uint32_t> get_time_nonce_address(std::
 
     return {formattedTime, ip_address, nonce};
 }
-        
 
+
+std::vector<uint8_t> receving_process() {
+    // ブロードキャスト受信の設定
+    int sock;
+    struct sockaddr_in addr;
+    char buf[2048];
+    std::string ip_address = get_own_ip();
+    std::string dest_ip = "";
+    std::string next_ip = "";
+    std::vector<uint8_t> send_buf;
+
+    // タイムスタンプ,ノンスと受信ノードのIPアドレスを管理するリスト
+    std::list<std::tuple<std::string, std::string, std::uint32_t>> received_messages;
+
+    sock = socket(AF_INET, SOCK_DGRAM, 0);
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(12345);
+    addr.sin_addr.s_addr = INADDR_ANY;
+
+    // バインド処理
+    if (bind(sock, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+        std::cerr << "Failed to bind socket" << std::endl;
+        return {};
+    }
+    std::cout << "bind success" << std::endl;
+
+    //受信処理
+    struct sockaddr_in sender_addr;
+    socklen_t addr_len = sizeof(sender_addr);
+    memset(buf, 0, sizeof(buf));
+    ssize_t received_bytes = recvfrom(sock, buf, sizeof(buf), 0, reinterpret_cast<struct sockaddr*>(&sender_addr), &addr_len);
+    
+    if (received_bytes < 0) {
+        std::cerr << "Failed to receive data" << std::endl;
+        return {};
+    }
+
+    //std::cout << "receive success" << std::endl;
+
+    // 公開鍵の取得
+    EVP_PKEY* public_key = load_public_key("public_key.pem");
+    if (!public_key) {
+        std::cerr << "Error: Could not load public key!" << std::endl;
+        return {};
+    }
+    //std::cout << "Public key loaded successfully!" << std::endl;
+
+    // 秘密鍵の取得
+    EVP_PKEY* private_key = load_private_key("private_key.pem");
+    if (!private_key) {
+        std::cerr << "Error: Could not load private key!" << std::endl;
+        return {};
+    }
+    //std::cout << "Private key loaded successfully!" << std::endl;
+
+    // 受信データを std::vector<uint8_t> に変換
+    std::vector<uint8_t> recv_buf(buf, buf + received_bytes);
+
+    std::cout << "-----------------------------------receive data--------------------------------------" << std::endl;
+
+    std::cout << "Received data size: " << recv_buf.size() << " bytes" << std::endl;
+
+    return recv_buf;
+}
 
 int main() {
-    RDP_format rdp;
     // ブロードキャスト受信の設定
     int sock;
     struct sockaddr_in addr;
@@ -788,7 +919,6 @@ int main() {
 
         std::cout << "Received data size: " << recv_buf.size() << " bytes" << std::endl;
 
-
         // 送信元から次の端末へのデシリアライズ処理
         try {
             // 送信元かどうかを確認
@@ -802,7 +932,6 @@ int main() {
             }
             */
            Forwarding_RDP_format deserialized_rdp = deserialize_forwarding_data(recv_buf);
-            
 
             /*
             std::cout << "-------------------------------------Deserialization check-------------------------------------" << std::endl;
@@ -874,13 +1003,13 @@ int main() {
                 //REPの作成
                 //自身の証明書を作成
                 Certificate_Format own_certificate = Makes_Certificate(get_own_ip(), get_PublicKey_As_String(public_key), get_time(), calculateExpirationTime(24, get_time()));
-                //自身の署名を作成
-                
+                //署名サイズを出力
+                std::cout << "Signature size:" << deserialized_rdp.signature.size() << std::endl;   
 
                 std::cout << "-------------------------------------Destination sends REP-------------------------------------" << std::endl;
-                Forwarding_RDP_format rep = Makes_REP("REP", deserialized_rdp.dest_ip, deserialized_rdp.source_ip, own_certificate, deserialized_rdp.n, deserialized_rdp.t, deserialized_rdp.signature , {}, {});
+                Forwarding_REP_format rep = Makes_REP("REP", deserialized_rdp.dest_ip, own_certificate, deserialized_rdp.n, deserialized_rdp.t, deserialized_rdp.signature , {}, {});
                 std::cout << "rep.type: "<< rep.type << std::endl;
-                std::cout << "rep.source_ip: " << rep.source_ip << std::endl;
+                //std::cout << "rep.source_ip: " << rep.source_ip << std::endl;
                 std::cout << "rep.dest_ip:" << rep.dest_ip << std::endl;
                 std::cout << "rep.cert.own_ip" << rep.cert.own_ip << std::endl;
                 std::cout << "rep.cert.own_public_key:"<< rep.cert.own_public_key << std::endl;
@@ -897,7 +1026,7 @@ int main() {
                 
                 // REPをシリアライズ
                 std::vector<uint8_t> rep_buf;
-                serialize_data(rep, rep_buf);
+                REP_serialize_data(rep, rep_buf);
 
                 // REPを送信(宛先は一つ前の端末に向けて送信)
                 struct sockaddr_in rep_addr;
