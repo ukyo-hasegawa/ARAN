@@ -830,22 +830,6 @@ std::vector<uint8_t> receving_process() {
 
     //std::cout << "receive success" << std::endl;
 
-    // 公開鍵の取得
-    EVP_PKEY* public_key = load_public_key("public_key.pem");
-    if (!public_key) {
-        std::cerr << "Error: Could not load public key!" << std::endl;
-        return {};
-    }
-    //std::cout << "Public key loaded successfully!" << std::endl;
-
-    // 秘密鍵の取得
-    EVP_PKEY* private_key = load_private_key("private_key.pem");
-    if (!private_key) {
-        std::cerr << "Error: Could not load private key!" << std::endl;
-        return {};
-    }
-    //std::cout << "Private key loaded successfully!" << std::endl;
-
     // 受信データを std::vector<uint8_t> に変換
     std::vector<uint8_t> recv_buf(buf, buf + received_bytes);
 
@@ -887,12 +871,14 @@ int main() {
         struct sockaddr_in sender_addr;
         socklen_t addr_len = sizeof(sender_addr);
         memset(buf, 0, sizeof(buf));
-        ssize_t received_bytes = recvfrom(sock, buf, sizeof(buf), 0, reinterpret_cast<struct sockaddr*>(&sender_addr), &addr_len);
-        
+        //ssize_t received_bytes = recvfrom(sock, buf, sizeof(buf), 0, reinterpret_cast<struct sockaddr*>(&sender_addr), &addr_len);
+        std::vector<uint8_t> recv_buf = receving_process();
+        /*
         if (received_bytes < 0) {
             std::cerr << "Failed to receive data" << std::endl;
             continue;
         }
+        */
 
         //std::cout << "receive success" << std::endl;
 
@@ -910,10 +896,11 @@ int main() {
             std::cerr << "Error: Could not load private key!" << std::endl;
             continue;
         }
+        
         //std::cout << "Private key loaded successfully!" << std::endl;
 
         // 受信データを std::vector<uint8_t> に変換
-        std::vector<uint8_t> recv_buf(buf, buf + received_bytes);
+        //std::vector<uint8_t> recv_buf(buf, buf + received_bytes);
 
         std::cout << "-----------------------------------receive data--------------------------------------" << std::endl;
 
