@@ -792,15 +792,15 @@ std::tuple<std::string, std::string, std::uint32_t> get_time_nonce_address(std::
 }
 
 
-std::vector<uint8_t> receving_process() {
+std::vector<uint8_t> receving_process(int sock) {
     // ブロードキャスト受信の設定
-    int sock;
+    //int sock;
     struct sockaddr_in addr;
     char buf[2048];
-    std::string ip_address = get_own_ip();
-    std::string dest_ip = "";
-    std::string next_ip = "";
-    std::vector<uint8_t> send_buf;
+    //std::string ip_address = get_own_ip();
+    //std::string dest_ip = "";
+    //std::string next_ip = "";
+    //std::vector<uint8_t> send_buf;
 
     // タイムスタンプ,ノンスと受信ノードのIPアドレスを管理するリスト
     std::list<std::tuple<std::string, std::string, std::uint32_t>> received_messages;
@@ -809,13 +809,14 @@ std::vector<uint8_t> receving_process() {
     addr.sin_family = AF_INET;
     addr.sin_port = htons(12345);
     addr.sin_addr.s_addr = INADDR_ANY;
-
+    /*
     // バインド処理
     if (bind(sock, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
         std::cerr << "Failed to bind socket" << std::endl;
         return {};
     }
     std::cout << "bind success" << std::endl;
+    */
 
     //受信処理
     struct sockaddr_in sender_addr;
@@ -854,6 +855,10 @@ int main() {
     std::list<std::tuple<std::string, std::string, std::uint32_t>> received_messages;
 
     sock = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sock < 0) {
+        std::cerr << "Failed to create socket" << std::endl;
+        return 1;
+    }
     addr.sin_family = AF_INET;
     addr.sin_port = htons(12345);
     addr.sin_addr.s_addr = INADDR_ANY;
@@ -872,7 +877,7 @@ int main() {
         socklen_t addr_len = sizeof(sender_addr);
         memset(buf, 0, sizeof(buf));
         //ssize_t received_bytes = recvfrom(sock, buf, sizeof(buf), 0, reinterpret_cast<struct sockaddr*>(&sender_addr), &addr_len);
-        std::vector<uint8_t> recv_buf = receving_process();
+        std::vector<uint8_t> recv_buf = receving_process(sock);
         /*
         if (received_bytes < 0) {
             std::cerr << "Failed to receive data" << std::endl;
