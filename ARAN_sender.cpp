@@ -198,23 +198,23 @@ void serialize_forwarding_data(const Forwarding_RDP_format& forwarding_rdp, std:
     // Certificate_Format のシリアライズ
     serialize_string(forwarding_rdp.rdp.cert.own_ip);
     serialize_string(forwarding_rdp.rdp.cert.own_public_key);
-    serialize_string(forwarding_rdp.cert.t);
-    serialize_string(forwarding_rdp.cert.expires);
+    serialize_string(forwarding_rdp.rdp.cert.t);
+    serialize_string(forwarding_rdp.rdp.cert.expires);
 
     // nを4バイトにシリアライズ
     for (int i = 0; i < 4; i++) {
-        buf.push_back((forwarding_rdp.n >> (8 * i)) & 0xFF);
+        buf.push_back((forwarding_rdp.rdp.n >> (8 * i)) & 0xFF);
     }
 
-    serialize_string(forwarding_rdp.t);
+    serialize_string(forwarding_rdp.rdp.t);
 
     // 署名のシリアライズ
-    std::uint32_t sig_len = forwarding_rdp.signature.size();
+    std::uint32_t sig_len = forwarding_rdp.rdp.signature.size();
     buf.push_back((sig_len >> 0) & 0xFF);
     buf.push_back((sig_len >> 8) & 0xFF);
     buf.push_back((sig_len >> 16) & 0xFF);
     buf.push_back((sig_len >> 24) & 0xFF);
-    buf.insert(buf.end(), forwarding_rdp.signature.begin(), forwarding_rdp.signature.end());
+    buf.insert(buf.end(), forwarding_rdp.rdp.signature.begin(), forwarding_rdp.rdp.signature.end());
 
     // receiver_signature のシリアライズ
     std::uint32_t receiver_sig_len = forwarding_rdp.receiver_signature.size();
@@ -404,11 +404,11 @@ std::string get_own_ip(const std::string& keyword = "wlan0") {
 // メッセージを構築する関数
 std::string construct_message(const Forwarding_RDP_format& deserialized_rdp) {
     std::ostringstream messageStream;
-    messageStream << deserialized_rdp.type << "|\n"
-                  << deserialized_rdp.dest_ip << "|\n" 
-                  << certificate_to_string(deserialized_rdp.cert) << "|\n"
-                  << deserialized_rdp.n << "|\n"
-                  << deserialized_rdp.t << "|\n";
+    messageStream << deserialized_rdp.rdp.type << "|\n"
+                  << deserialized_rdp.rdp.dest_ip << "|\n" 
+                  << certificate_to_string(deserialized_rdp.rdp.cert) << "|\n"
+                  << deserialized_rdp.rdp.n << "|\n"
+                  << deserialized_rdp.rdp.t << "|\n";
     return messageStream.str();
 }
 
@@ -545,11 +545,11 @@ int main() {
     std::cout << message << std::endl;
     std::cout << "-------------------------------------Message-End-------------------------------------: " << std::endl;
 
-    test_rdp1.signature = signMessage(private_key, message);
-    if (test_rdp1.signature.empty()) return -1;
+    test_rdp1.rdp.signature = signMessage(private_key, message);
+    if (test_rdp1.rdp.signature.empty()) return -1;
 
     std::cout << "-------------------------------------Signature-------------------------------------: " << std::endl;
-    for (unsigned char c : test_rdp1.signature) {
+    for (unsigned char c : test_rdp1.rdp.signature) {
         std::cout << std::hex << (int)c << " ";
     }
     std::cout << std::dec << std::endl;
