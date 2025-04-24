@@ -33,28 +33,24 @@ struct RDP_format {
     std::string t;
     std::vector<unsigned char> signature;
 };
-
+//何この構造体？
 struct Forwarding_RDP_format {
-    std::string type;
-    std::string source_ip;
-    std::string dest_ip;
-    Certificate_Format cert;
-    std::uint32_t n;
-    std::string t;
-    std::vector<unsigned char> signature;
+    RDP_format rdp;
     std::vector<unsigned char> receiver_signature;
     Certificate_Format receiver_cert;
 };
 
-Forwarding_RDP_format Makes_RDP(std::string type, std::string own_ip, std::string dest_ip, Certificate_Format cert, std::uint32_t n, std::string t, std::string expires, std::vector<unsigned char> signature, std::vector<unsigned char> receiver_signature, Certificate_Format receiver_cert) {
+Forwarding_RDP_format Makes_RDP(RDP_format RDP, std::vector<unsigned char> receiver_signature, Certificate_Format receiver_cert) {
     Forwarding_RDP_format rdp;
-    rdp.type = type;
-    rdp.source_ip = own_ip;
-    rdp.dest_ip = dest_ip;
-    rdp.cert = cert;
-    rdp.n = n;
-    rdp.t = t;
-    rdp.signature = signature;
+    rdp.rdp.type = RDP.type;
+    rdp.rdp.source_ip = RDP.source_ip;
+    rdp.rdp.dest_ip = RDP.dest_ip;
+    rdp.rdp.cert = RDP.cert;
+    rdp.rdp.n = RDP.n;
+    rdp.rdp.t = RDP.t;
+    rdp.rdp.signature = RDP.signature;
+    rdp.receiver_cert = receiver_cert;
+    rdp.receiver_signature = receiver_signature;
     return rdp;
 }
 
@@ -71,7 +67,11 @@ int send_process(std::vector<uint8_t> buf) {
     int yes=1;
     // 送信処理
     int sock = socket(AF_INET, SOCK_DGRAM, 0);
-    if (sock < 0) return 1;
+    if (sock < 0) 
+    {
+        perror("socket failed");
+        return 1;
+    }
 
     struct sockaddr_in addr;
     addr.sin_family = AF_INET;
@@ -91,6 +91,38 @@ int send_process(std::vector<uint8_t> buf) {
         close(sock);
         return 1;
     }
+}
+
+std::vector<uint8_t> receving_process(int sock) {
+    std::cout << "receive process start" << std::endl;
+    // ブロードキャスト受信の設定
+    //int sock;
+    struct sockaddr_in addr;
+    char buf[2048];
+    
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(12345);
+    addr.sin_addr.s_addr = INADDR_ANY;
+
+    //受信処理
+    struct sockaddr_in sender_addr;
+    socklen_t addr_len = sizeof(sender_addr);
+    memset(buf, 0, sizeof(buf));
+    ssize_t received_bytes = recvfrom(sock, buf, sizeof(buf), 0, reinterpret_cast<struct sockaddr*>(&sender_addr), &addr_len);
+    
+    if (received_bytes < 0) {
+        std::cerr << "Failed to receive data" << std::endl;
+        return {};
+    }
+
+    // 受信データを std::vector<uint8_t> に変換
+    std::vector<uint8_t> recv_buf(buf, buf + received_bytes);
+
+    std::cout << "-----------------------------------receive data--------------------------------------" << std::endl;
+
+    std::cout << "Received data size: " << recv_buf.size() << " bytes" << std::endl;
+
+    return recv_buf;
 }
 
 std::string certificate_to_string(const Certificate_Format& cert) {
@@ -159,13 +191,13 @@ void serialize_forwarding_data(const Forwarding_RDP_format& forwarding_rdp, std:
         buf.insert(buf.end(), str.begin(), str.end());
     };
 
-    serialize_string(forwarding_rdp.type);
-    serialize_string(forwarding_rdp.source_ip);
-    serialize_string(forwarding_rdp.dest_ip);
+    serialize_string(forwarding_rdp.rdp.type);
+    serialize_string(forwarding_rdp.rdp.source_ip);
+    serialize_string(forwarding_rdp.rdp.dest_ip);
 
     // Certificate_Format のシリアライズ
-    serialize_string(forwarding_rdp.cert.own_ip);
-    serialize_string(forwarding_rdp.cert.own_public_key);
+    serialize_string(forwarding_rdp.rdp.cert.own_ip);
+    serialize_string(forwarding_rdp.rdp.cert.own_public_key);
     serialize_string(forwarding_rdp.cert.t);
     serialize_string(forwarding_rdp.cert.expires);
 
@@ -433,9 +465,44 @@ std::vector<unsigned char> signMessage(EVP_PKEY* private_key, const std::string&
     return signature;
 }
 
+
+bool verifySignature(EVP_PKEY* public_key, const std::string& message, const std::vector<unsigned char>& signature) {
+    EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+    if (!ctx) {
+        std::cerr << "Failed to create EVP_MD_CTX" << std::endl;
+        return false;
+    }
+
+    if (EVP_DigestVerifyInit(ctx, nullptr, EVP_sha256(), nullptr, public_key) <= 0) {
+        std::cerr << "EVP_DigestVerifyInit failed" << std::endl;
+        EVP_MD_CTX_free(ctx);
+        return false;
+    }
+
+    if (EVP_DigestVerifyUpdate(ctx, message.c_str(), message.size()) <= 0) {
+        std::cerr << "EVP_DigestVerifyUpdate failed" << std::endl;
+        EVP_MD_CTX_free(ctx);
+        return false;
+    }
+
+    int result = EVP_DigestVerifyFinal(ctx, signature.data(), signature.size());
+    EVP_MD_CTX_free(ctx);
+
+    if (result == 1) {
+        return true; // 署名が正しい
+    } else if (result == 0) {
+        return false; // 署名が正しくない
+    } else {
+        std::cerr << "EVP_DigestVerifyFinal failed" << std::endl;
+        return false;
+    }
+}
+
 int main() {
     Forwarding_RDP_format test_rdp1;
     Certificate_Format test_cert1;
+    char recive_buf[2048];
+    int sock;
 
     // 公開鍵の取得
     EVP_PKEY* public_key = load_public_key("public_key.pem");
@@ -493,6 +560,16 @@ int main() {
 
     if(send_process(buf)) {
         std::cout << "Message sent successfully" << std::endl;
+    }
+
+    while (true)
+    {
+        //受信処理
+        struct sockaddr_in sender_addr;
+        socklen_t addr_len = sizeof(sender_addr);
+        memset(recive_buf, 0, sizeof(recive_buf));
+        
+        std::vector<uint8_t> recv_buf = receving_process(sock);
     }
 
     EVP_PKEY_free(private_key);
