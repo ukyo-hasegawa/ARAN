@@ -592,6 +592,7 @@ std::string construct_message(const Forwarding_RDP_format& deserialized_rdp) {
     return messageStream.str();
 }
 
+
 // メッセージを構築する関数
 std::string construct_message_with_key(const Forwarding_RDP_format& deserialized_rdp, const std::string& public_key_str) {
     std::ostringstream messageStream;
