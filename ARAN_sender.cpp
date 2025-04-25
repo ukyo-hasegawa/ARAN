@@ -500,6 +500,7 @@ bool verifySignature(EVP_PKEY* public_key, const std::string& message, const std
 
 int main() {
     Forwarding_RDP_format test_rdp1;
+    RDP_format rdp1;
     Certificate_Format test_cert1;
     char recive_buf[2048];
     int sock;
@@ -526,15 +527,19 @@ int main() {
         expirationTime
     );
 
-    test_rdp1 = Makes_RDP(
+    // RDP_format オブジェクトを作成
+    RDP_format rdp = {
         "RDP",
         "10.0.0.1",
         "10.0.0.4",
         test_cert1,
         std::random_device()(),
         Formatted_Time,
-        expirationTime,
-        {},
+        {}, // 空の署名
+    };
+
+    test_rdp1 = Makes_RDP(
+        rdp,
         {},
         {}
     );
