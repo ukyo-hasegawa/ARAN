@@ -780,7 +780,7 @@ std::tuple<std::vector<uint8_t>, std::string> receving_process(int sock) {
     
     if (received_bytes < 0) {
         std::cerr << "Failed to receive data" << std::endl;
-        return {{}, ""};
+        return std::make_tuple(std::vector<unsigned char>(), std::string());
     }
 
     // 送信元IPアドレスを取得
