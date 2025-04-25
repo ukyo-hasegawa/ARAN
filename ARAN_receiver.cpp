@@ -936,7 +936,7 @@ int main() {
                 if (sendto(rep_sock, rep_buf.data(), rep_buf.size(), 0, reinterpret_cast<struct sockaddr*>(&rep_addr), sizeof(rep_addr)) < 0) {
                     perror("sendto failed for REP");
                 } else {
-                    std::cout << "---------------------------REP sent successfully to " << deserialized_rdp.source_ip <<"------------------------------" << std::endl;
+                    std::cout << "---------------------------REP sent successfully to " << sender_ip <<"------------------------------" << std::endl;
                 }
 
                 close(rep_sock);
