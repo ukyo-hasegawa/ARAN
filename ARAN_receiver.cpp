@@ -770,19 +770,12 @@ std::tuple<std::string, std::string, std::uint32_t> get_time_nonce_address(std::
 
 std::vector<uint8_t> receving_process(int sock) {
     std::cout << "receive process start" << std::endl;
-    // ブロードキャスト受信の設定
-    //int sock;
-    struct sockaddr_in addr;
-    char buf[2048];
-    
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(12345);
-    addr.sin_addr.s_addr = INADDR_ANY;
 
-    //受信処理
     struct sockaddr_in sender_addr;
     socklen_t addr_len = sizeof(sender_addr);
+    char buf[2048];
     memset(buf, 0, sizeof(buf));
+
     ssize_t received_bytes = recvfrom(sock, buf, sizeof(buf), 0, reinterpret_cast<struct sockaddr*>(&sender_addr), &addr_len);
     
     if (received_bytes < 0) {
@@ -790,11 +783,14 @@ std::vector<uint8_t> receving_process(int sock) {
         return {};
     }
 
+    // 送信元IPアドレスを取得
+    std::string sender_ip = inet_ntoa(sender_addr.sin_addr);
+    std::cout << "Sender IP: " << sender_ip << std::endl;
+
     // 受信データを std::vector<uint8_t> に変換
     std::vector<uint8_t> recv_buf(buf, buf + received_bytes);
 
     std::cout << "-----------------------------------receive data--------------------------------------" << std::endl;
-
     std::cout << "Received data size: " << recv_buf.size() << " bytes" << std::endl;
 
     return recv_buf;
