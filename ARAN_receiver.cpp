@@ -401,6 +401,8 @@ RDP_format deserialize_data(const std::vector<uint8_t>& buf) {
     std::size_t offset = 0;
 
     auto deserialize_string = [&buf, &offset]() {
+        std::cout << "buf.size():" << buf.size() << std::endl;
+
         if (offset + 4 > buf.size()) throw std::runtime_error("Buffer underflow while reading string length");
         std::uint32_t len = 0;
         len |= buf[offset + 0] << 0;
@@ -457,7 +459,7 @@ RDP_format deserialize_data(const std::vector<uint8_t>& buf) {
 Forwarding_RDP_format deserialize_forwarding_data(const std::vector<uint8_t>& buf) {
     Forwarding_RDP_format deserialized_rdp;
     std::size_t offset = 0;
-
+    std::cout << "buf.size():" << buf.size() << std::endl;
     auto deserialize_string = [&buf, &offset]() {
         if (offset + 4 > buf.size()) throw std::runtime_error("Buffer underflow while reading string length");
         std::uint32_t len = 0;
@@ -528,6 +530,80 @@ Forwarding_RDP_format deserialize_forwarding_data(const std::vector<uint8_t>& bu
     deserialized_rdp.receiver_cert.expires = deserialize_string();
 
     return deserialized_rdp;
+}
+
+Forwarding_REP_format deserialize_forwarding_rep_data(const std::vector<uint8_t>& buf) {
+    Forwarding_REP_format deserialized_rep;
+    std::size_t offset = 0;
+
+    auto deserialize_string = [&buf, &offset]() {
+        if (offset + 4 > buf.size()) throw std::runtime_error("Buffer underflow while reading string length");
+        std::uint32_t len = 0;
+        len |= buf[offset + 0] << 0;
+        len |= buf[offset + 1] << 8;
+        len |= buf[offset + 2] << 16;
+        len |= buf[offset + 3] << 24;
+        offset += 4;
+
+        if (len > buf.size()) throw std::runtime_error("Invalid string length detected");
+        if (offset + len > buf.size()) throw std::runtime_error("Buffer underflow while reading string data");
+
+        std::string result(buf.begin() + offset, buf.begin() + offset + len);
+        offset += len;
+        return result;
+    };
+
+    deserialized_rep.type = deserialize_string();
+    deserialized_rep.dest_ip = deserialize_string();
+
+    // Certificate_Format のデシリアライズ
+    deserialized_rep.cert.own_ip = deserialize_string();
+    deserialized_rep.cert.own_public_key = deserialize_string();
+    deserialized_rep.cert.t = deserialize_string();
+    deserialized_rep.cert.expires = deserialize_string();
+
+    // n のデシリアライズ
+    if (offset + 4 > buf.size()) throw std::runtime_error("Buffer underflow while reading int32");
+    deserialized_rep.n = 0;
+    deserialized_rep.n |= buf[offset + 0] << 0;
+    deserialized_rep.n |= buf[offset + 1] << 8;
+    deserialized_rep.n |= buf[offset + 2] << 16;
+    deserialized_rep.n |= buf[offset + 3] << 24;
+    offset += 4;
+
+    deserialized_rep.t = deserialize_string();
+
+    // 署名のデシリアライズ
+    if (offset + 4 > buf.size()) throw std::runtime_error("Buffer underflow while reading signature length");
+    std::uint32_t sig_len = 0;
+    sig_len |= buf[offset + 0] << 0;
+    sig_len |= buf[offset + 1] << 8;
+    sig_len |= buf[offset + 2] << 16;
+    sig_len |= buf[offset + 3] << 24;
+    offset += 4;
+    if (offset + sig_len > buf.size()) throw std::runtime_error("Buffer underflow while reading signature data");
+    deserialized_rep.signature = std::vector<unsigned char>(buf.begin() + offset, buf.begin() + offset + sig_len);
+    offset += sig_len;
+
+    // receiver_signature のデシリアライズ
+    if (offset + 4 > buf.size()) throw std::runtime_error("Buffer underflow while reading receiver signature length");
+    std::uint32_t receiver_sig_len = 0;
+    receiver_sig_len |= buf[offset + 0] << 0;
+    receiver_sig_len |= buf[offset + 1] << 8;
+    receiver_sig_len |= buf[offset + 2] << 16;
+    receiver_sig_len |= buf[offset + 3] << 24;
+    offset += 4;
+    if (offset + receiver_sig_len > buf.size()) throw std::runtime_error("Buffer underflow while reading receiver signature data");
+    deserialized_rep.receiver_signature = std::vector<unsigned char>(buf.begin() + offset, buf.begin() + offset + receiver_sig_len);
+    offset += receiver_sig_len;
+
+    // receiver_cert のデシリアライズ
+    deserialized_rep.receiver_cert.own_ip = deserialize_string();
+    deserialized_rep.receiver_cert.own_public_key = deserialize_string();
+    deserialized_rep.receiver_cert.t = deserialize_string();
+    deserialized_rep.receiver_cert.expires = deserialize_string();
+
+    return deserialized_rep;
 }
 
 std::string certificate_to_string(const Certificate_Format& cert) {
