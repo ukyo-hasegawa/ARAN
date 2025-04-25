@@ -33,7 +33,7 @@ struct RDP_format {
     std::string t;
     std::vector<unsigned char> signature;
 };
-//何この構造体？
+
 struct Forwarding_RDP_format {
     RDP_format rdp;
     std::vector<unsigned char> receiver_signature;
@@ -94,7 +94,6 @@ int send_process(std::vector<uint8_t> buf) {
 }
 
 std::vector<uint8_t> receving_process(int sock) {
-    std::cout << "receive process start" << std::endl;
     // ブロードキャスト受信の設定
     //int sock;
     struct sockaddr_in addr;
@@ -111,7 +110,7 @@ std::vector<uint8_t> receving_process(int sock) {
     ssize_t received_bytes = recvfrom(sock, buf, sizeof(buf), 0, reinterpret_cast<struct sockaddr*>(&sender_addr), &addr_len);
     
     if (received_bytes < 0) {
-        std::cerr << "Failed to receive data" << std::endl;
+        //std::cerr << "Failed to receive data" << std::endl;
         return {};
     }
 
