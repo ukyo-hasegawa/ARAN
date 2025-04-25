@@ -930,8 +930,6 @@ int main() {
                 std::cout << "Send REP to : " << sender_ip.c_str() << std::endl;
                 rep_addr.sin_addr.s_addr = inet_addr(sender_ip.c_str());
 
-
-                
                 int rep_sock = socket(AF_INET, SOCK_DGRAM, 0);
                 if (rep_sock < 0) {
                     std::cerr << "Failed to create socket for REP" << std::endl;
