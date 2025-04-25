@@ -768,7 +768,7 @@ std::tuple<std::string, std::string, std::uint32_t> get_time_nonce_address(std::
 }
 
 
-std::vector<uint8_t> receving_process(int sock) {
+std::tuple<std::vector<uint8_t>, std::string> receving_process(int sock) {
     std::cout << "receive process start" << std::endl;
 
     struct sockaddr_in sender_addr;
@@ -780,7 +780,7 @@ std::vector<uint8_t> receving_process(int sock) {
     
     if (received_bytes < 0) {
         std::cerr << "Failed to receive data" << std::endl;
-        return {};
+        return {{}, ""};
     }
 
     // 送信元IPアドレスを取得
@@ -793,7 +793,7 @@ std::vector<uint8_t> receving_process(int sock) {
     std::cout << "-----------------------------------receive data--------------------------------------" << std::endl;
     std::cout << "Received data size: " << recv_buf.size() << " bytes" << std::endl;
 
-    return recv_buf;
+    return {recv_buf, sender_ip};
 }
 
 int main() {
@@ -834,7 +834,9 @@ int main() {
         socklen_t addr_len = sizeof(sender_addr);
         memset(buf, 0, sizeof(buf));
         
-        std::vector<uint8_t> recv_buf = receving_process(sock);
+        // 受信処理
+        auto [recv_buf, sender_ip] = receving_process(sock);
+        std::cout << "sender_ip:" << sender_ip << std::endl;
 
         // 公開鍵の取得
         EVP_PKEY* public_key = load_public_key("public_key.pem");
@@ -852,7 +854,7 @@ int main() {
         
         try {
             // 送信元かどうかを確認
-            std::string sender_ip = inet_ntoa(sender_addr.sin_addr);
+            //std::string sender_ip = inet_ntoa(sender_addr.sin_addr);
             Forwarding_RDP_format deserialized_rdp = deserialize_forwarding_data(recv_buf);
 
             std::cout << "deserialize_rdp.type:" << deserialized_rdp.type << std::endl;
@@ -923,7 +925,7 @@ int main() {
                 struct sockaddr_in rep_addr;
                 rep_addr.sin_family = AF_INET;
                 rep_addr.sin_port = htons(12345);
-                std::cout << "Send REP to : " << sender_ip.c_str() << std::endl;
+                std::cout << "Send REP to : " << sender_ip<< std::endl;
                 rep_addr.sin_addr.s_addr = inet_addr(sender_ip.c_str());
 
                 int rep_sock = socket(AF_INET, SOCK_DGRAM, 0);
