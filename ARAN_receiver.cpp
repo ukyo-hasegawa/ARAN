@@ -839,8 +839,6 @@ int main() {
         memset(buf, 0, sizeof(buf));
         
         std::vector<uint8_t> recv_buf = receving_process(sock);
-        
-        
 
         // 公開鍵の取得
         EVP_PKEY* public_key = load_public_key("public_key.pem");
@@ -848,8 +846,7 @@ int main() {
             std::cerr << "Error: Could not load public key!" << std::endl;
             continue;
         }
-        //std::cout << "Public key loaded successfully!" << std::endl;
-
+        
         // 秘密鍵の取得
         EVP_PKEY* private_key = load_private_key("private_key.pem");
         if (!private_key) {
@@ -872,7 +869,6 @@ int main() {
             
             // 受信したメッセージのtime stamp:tとnonce:nが既に受信したものかどうかを確認する
             if(deserialized_rdp.type == "RDP") {
-                //std::cout << "This is REP message." << std::endl;
                 
                 auto it = std::find_if(received_messages.begin(), received_messages.end(),
                 [&time_and_nonce_and_ipaddress](const std::tuple<std::string, std::string, std::uint32_t>& element) {
@@ -931,6 +927,7 @@ int main() {
                 struct sockaddr_in rep_addr;
                 rep_addr.sin_family = AF_INET;
                 rep_addr.sin_port = htons(12345);
+                std::cout << "Send REP to : " << sender_ip.c_str() << std::endl;
                 rep_addr.sin_addr.s_addr = inet_addr(sender_ip.c_str());
 
                 int rep_sock = socket(AF_INET, SOCK_DGRAM, 0);
