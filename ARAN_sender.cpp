@@ -63,6 +63,17 @@ Certificate_Format Makes_Certificate(std::string own_ip, std::string own_public_
     return Certificate;
 }
 
+std::string get_packet_type(const std::vector<uint8_t>& buf) {
+    if (buf.size() < 4) {
+        throw std::runtime_error("Buffer too small to determine packet type");
+    }
+
+    // パケットの先頭4バイトを文字列として取得
+    std::string type(buf.begin(), buf.begin() + 4);
+
+    return type;
+}
+
 int send_process(std::vector<uint8_t> buf) {
     int yes=1;
     // 送信処理
