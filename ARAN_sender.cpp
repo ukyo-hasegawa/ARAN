@@ -47,13 +47,7 @@ struct Forwarding_RDP_format {
 
 Forwarding_RDP_format Makes_RDP(RDP_format RDP, std::vector<unsigned char> receiver_signature, Certificate_Format receiver_cert) {
     Forwarding_RDP_format rdp;
-    rdp.rdp.type = RDP.type;
-    rdp.rdp.source_ip = RDP.source_ip;
-    rdp.rdp.dest_ip = RDP.dest_ip;
-    rdp.rdp.cert = RDP.cert;
-    rdp.rdp.n = RDP.n;
-    rdp.rdp.t = RDP.t;
-    rdp.rdp.signature = RDP.signature;
+    rdp.rdp = RDP;
     rdp.receiver_cert = receiver_cert;
     rdp.receiver_signature = receiver_signature;
     return rdp;
@@ -187,13 +181,6 @@ void serialize_data(const RDP_format& test_rdp, std::vector<uint8_t>& buf) {
     buf.insert(buf.end(), test_rdp.signature.begin(), test_rdp.signature.end());
 
     std::cout << "Serialized data size: " << buf.size() << " bytes" << std::endl;
-    /*
-    std::cout << "Serialized data (hex): ";
-    for (unsigned char c : buf) {
-        std::cout << std::hex << (int)c << " ";
-    }
-    std::cout << std::dec << std::endl;
-    */
 }
 
 // Forwarding_RDP_format のシリアライズ処理
