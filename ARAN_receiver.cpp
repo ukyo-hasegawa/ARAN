@@ -62,14 +62,13 @@ struct Forwarding_REP_format {
     Certificate_Format receiver_cert;
 };
 
-std::string get_packet_type(const std::vector<uint8_t>& buf) {
-    if (buf.size() < 4) {
+MessageType get_packet_type(const std::vector<uint8_t>& buf) {
+    if (buf.size() < 1) {
         throw std::runtime_error("Buffer too small to determine packet type");
     }
 
-    std::string type(buf.begin(), buf.begin() + 4);
-    std::cout << "Extracted type: " << type << std::endl;  // デバッグ出力
-    return type;
+    // バッファの先頭1バイトを MessageType に変換
+    return static_cast<MessageType>(buf[0]);
 }
 
 std::string get_own_ip(const std::string& keyword = "wlan0") {
@@ -888,9 +887,17 @@ std::tuple<std::vector<uint8_t>, std::string> receving_process(int sock) {
     std::vector<uint8_t> recv_buf(buf, buf + received_bytes);
 
     std::cout << "-----------------------------------receive data--------------------------------------" << std::endl;
+
+
     std::cout << "Received data size: " << recv_buf.size() << " bytes" << std::endl;
 
-    std::cout << std::dec << std::endl;
+    // 受信データを16進数で表示
+    std::cout << "Received data (hex): ";
+    for (unsigned char c : recv_buf) {
+        std::cout << std::hex << static_cast<int>(c) << " ";
+    }
+    std::cout << std::dec << std::endl; // 10進数に戻す
+
 
     return {recv_buf, sender_ip};
 }
@@ -932,11 +939,16 @@ int main() {
         struct sockaddr_in sender_addr;
         socklen_t addr_len = sizeof(sender_addr);
         memset(buf, 0, sizeof(buf));
+
+        std::vector<uint8_t> recv_buf;
+        std::string sender_ip;
+
+        // 受信処理
+        std::tie(recv_buf, sender_ip) = receving_process(sock);
+        std::cout << "sender_ip: " << sender_ip << std::endl;
         
         // 受信処理
-        auto [recv_buf, sender_ip] = receving_process(sock);
-        std::cout << "sender_ip:" << sender_ip << std::endl;
-
+        
         // 公開鍵の取得
         EVP_PKEY* public_key = load_public_key("public_key.pem");
         if (!public_key) {
@@ -953,11 +965,11 @@ int main() {
         
         try {
             //REPかRDPかを判断。
-            std::string packet_type = get_packet_type(recv_buf);
-            std::cout << "packet_type: " << packet_type << std::endl;
+            MessageType packet_type = get_packet_type(recv_buf);
+            std::cout << "packet_type: " << static_cast<int>(packet_type) << std::endl;
             std::cout.flush();
 
-            if(packet_type == "RDP")
+            if(static_cast<int>(packet_type) == 1)
             {
                 Forwarding_RDP_format deserialized_rdp = deserialize_forwarding_data(recv_buf);
                 std::cout << "deserialize_rdp.type:" << static_cast<int>(deserialized_rdp.rdp.type)<< std::endl;
