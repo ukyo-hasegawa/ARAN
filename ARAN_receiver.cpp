@@ -960,7 +960,7 @@ int main() {
                 std::cout << "Receving nonce:"<< std::get<2>(time_and_nonce_and_ipaddress) << std::endl;
             
             // 受信したメッセージのtime stamp:tとnonce:nが既に受信したものかどうかを確認する
-            if(deserialized_rdp.rdp.type == MessageType::RDP) 
+            if(static_cast<int>(packet_type) == 1) 
             {    
                 auto it = std::find_if(received_messages.begin(), received_messages.end(),
                 [&time_and_nonce_and_ipaddress](const std::tuple<std::string, std::string, std::uint32_t>& element) {
