@@ -234,12 +234,6 @@ void serialize_forwarding_data(const Forwarding_RDP_format& forwarding_rdp, std:
     serialize_string(forwarding_rdp.receiver_cert.expires);
 
     std::cout << "Serialized forwarding data size: " << buf.size() << " bytes" << std::endl;
-    
-    std::cout << "Serialized forwarding data (hex): ";
-    for (unsigned char c : buf) {
-        std::cout << std::hex << (int)c << " ";
-    }
-    std::cout << std::dec << std::endl;
 }
 
 // デシリアライズ処理

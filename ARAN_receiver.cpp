@@ -285,13 +285,6 @@ void serialize_data_RDP_format(const RDP_format& test_rdp, std::vector<uint8_t>&
     buf.insert(buf.end(), test_rdp.signature.begin(), test_rdp.signature.end());
 
     std::cout << "Serialized data size: " << buf.size() << " bytes" << std::endl;
-    /*
-    std::cout << "Serialized data (hex): ";
-    for (unsigned char c : buf) {
-        std::cout << std::hex << (int)c << " ";
-    }
-    std::cout << std::dec << std::endl;
-    */
 }
 
 // Forwarding_RDP_format のシリアライズ処理
@@ -345,13 +338,6 @@ void serialize_data(const Forwarding_RDP_format& forwarding_rdp, std::vector<uin
     serialize_string(forwarding_rdp.receiver_cert.expires);
 
     std::cout << "Serialized forwarding data size: " << buf.size() << " bytes" << std::endl;
-    /*
-    std::cout << "Serialized forwarding data (hex): ";
-    for (unsigned char c : buf) {
-        std::cout << std::hex << (int)c << " ";
-    }
-    std::cout << std::dec << std::endl;
-    */
 }
 
 std::vector<unsigned char> deserialize_vector(const std::vector<uint8_t>& buf, std::size_t& offset) {
@@ -480,8 +466,6 @@ Forwarding_RDP_format deserialize_forwarding_data(const std::vector<uint8_t>& bu
         len |= buf[offset + 2] << 16;
         len |= buf[offset + 3] << 24;
         offset += 4;
-
-        std::cout << "len size" << len <<std::endl;
 
         // 異常な長さを検出
         if (len > buf.size()){ 
@@ -890,12 +874,6 @@ std::tuple<std::vector<uint8_t>, std::string> receving_process(int sock) {
 
 
     std::cout << "Received data size: " << recv_buf.size() << " bytes" << std::endl;
-
-    // 受信データを16進数で表示
-    std::cout << "Received data (hex): ";
-    for (unsigned char c : recv_buf) {
-        std::cout << std::hex << static_cast<int>(c) << " ";
-    }
     std::cout << std::dec << std::endl; // 10進数に戻す
 
 
