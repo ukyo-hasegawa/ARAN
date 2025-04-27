@@ -67,9 +67,8 @@ std::string get_packet_type(const std::vector<uint8_t>& buf) {
         throw std::runtime_error("Buffer too small to determine packet type");
     }
 
-    // パケットの先頭4バイトを文字列として取得
     std::string type(buf.begin(), buf.begin() + 4);
-
+    std::cout << "Extracted type: " << type << std::endl;  // デバッグ出力
     return type;
 }
 
@@ -196,8 +195,61 @@ EVP_PKEY* load_private_key(const std::string& filename) {
     fclose(file);
     return private_key;
 }
+//REP専用のシリアライズ関数
+void serialize_forwarding_rep(const Forwarding_REP_format& rep, std::vector<uint8_t>& buf) {
+    auto serialize_string = [&buf](const std::string& str) {
+        std::uint32_t len = str.size();
+        buf.push_back((len >> 0) & 0xFF);
+        buf.push_back((len >> 8) & 0xFF);
+        buf.push_back((len >> 16) & 0xFF);
+        buf.push_back((len >> 24) & 0xFF);
+        buf.insert(buf.end(), str.begin(), str.end());
+    };
 
-// シリアライズ処理
+    // type のシリアライズ
+    buf.push_back(static_cast<uint8_t>(rep.type));
+
+    // dest_ip のシリアライズ
+    serialize_string(rep.dest_ip);
+
+    // Certificate_Format のシリアライズ
+    serialize_string(rep.cert.own_ip);
+    serialize_string(rep.cert.own_public_key);
+    serialize_string(rep.cert.t);
+    serialize_string(rep.cert.expires);
+
+    // n のシリアライズ
+    for (int i = 0; i < 4; i++) {
+        buf.push_back((rep.n >> (8 * i)) & 0xFF);
+    }
+
+    // t のシリアライズ
+    serialize_string(rep.t);
+
+    // signature のシリアライズ
+    std::uint32_t sig_len = rep.signature.size();
+    buf.push_back((sig_len >> 0) & 0xFF);
+    buf.push_back((sig_len >> 8) & 0xFF);
+    buf.push_back((sig_len >> 16) & 0xFF);
+    buf.push_back((sig_len >> 24) & 0xFF);
+    buf.insert(buf.end(), rep.signature.begin(), rep.signature.end());
+
+    // receiver_signature のシリアライズ
+    std::uint32_t receiver_sig_len = rep.receiver_signature.size();
+    buf.push_back((receiver_sig_len >> 0) & 0xFF);
+    buf.push_back((receiver_sig_len >> 8) & 0xFF);
+    buf.push_back((receiver_sig_len >> 16) & 0xFF);
+    buf.push_back((receiver_sig_len >> 24) & 0xFF);
+    buf.insert(buf.end(), rep.receiver_signature.begin(), rep.receiver_signature.end());
+
+    // receiver_cert のシリアライズ
+    serialize_string(rep.receiver_cert.own_ip);
+    serialize_string(rep.receiver_cert.own_public_key);
+    serialize_string(rep.receiver_cert.t);
+    serialize_string(rep.receiver_cert.expires);
+}
+
+// RDP専用シリアライズ処理
 void serialize_data_RDP_format(const RDP_format& test_rdp, std::vector<uint8_t>& buf) {
     auto serialize_string = [&buf](const std::string& str) {
         std::uint32_t len = str.size();
@@ -301,63 +353,6 @@ void serialize_data(const Forwarding_RDP_format& forwarding_rdp, std::vector<uin
     }
     std::cout << std::dec << std::endl;
     */
-}
-
-// Forwarding_REP_format のシリアライズ処理
-void REP_serialize_data(const Forwarding_REP_format& forwarding_rep, std::vector<uint8_t>& buf) {
-    auto serialize_string = [&buf](const std::string& str) {
-        std::uint32_t len = str.size();
-        buf.push_back((len >> 0) & 0xFF);
-        buf.push_back((len >> 8) & 0xFF);
-        buf.push_back((len >> 16) & 0xFF);
-        buf.push_back((len >> 24) & 0xFF);
-        buf.insert(buf.end(), str.begin(), str.end());
-    };
-
-    buf.push_back(static_cast<uint8_t>(forwarding_rep.type));
-    serialize_string(forwarding_rep.dest_ip);
-
-    // Certificate_Format のシリアライズ
-    serialize_string(forwarding_rep.cert.own_ip);
-    serialize_string(forwarding_rep.cert.own_public_key);
-    serialize_string(forwarding_rep.cert.t);
-    serialize_string(forwarding_rep.cert.expires);
-
-    // nを4バイトにシリアライズ
-    for (int i = 0; i < 4; i++) {
-        buf.push_back((forwarding_rep.n >> (8 * i)) & 0xFF);
-    }
-
-    serialize_string(forwarding_rep.t);
-
-    // 署名のシリアライズ
-    std::uint32_t sig_len = forwarding_rep.signature.size();
-    buf.push_back((sig_len >> 0) & 0xFF);
-    buf.push_back((sig_len >> 8) & 0xFF);
-    buf.push_back((sig_len >> 16) & 0xFF);
-    buf.push_back((sig_len >> 24) & 0xFF);
-    buf.insert(buf.end(), forwarding_rep.signature.begin(), forwarding_rep.signature.end());
-
-    // receiver_signature のシリアライズ
-    std::uint32_t receiver_sig_len = forwarding_rep.receiver_signature.size();
-    buf.push_back((receiver_sig_len >> 0) & 0xFF);
-    buf.push_back((receiver_sig_len >> 8) & 0xFF);
-    buf.push_back((receiver_sig_len >> 16) & 0xFF);
-    buf.push_back((receiver_sig_len >> 24) & 0xFF);
-    buf.insert(buf.end(), forwarding_rep.receiver_signature.begin(), forwarding_rep.receiver_signature.end());
-
-    // receiver_cert のシリアライズ
-    serialize_string(forwarding_rep.receiver_cert.own_ip);
-    serialize_string(forwarding_rep.receiver_cert.own_public_key);
-    serialize_string(forwarding_rep.receiver_cert.t);
-    serialize_string(forwarding_rep.receiver_cert.expires);
-
-    std::cout << "Serialized REP data size: " << buf.size() << " bytes" << std::endl;
-    std::cout << "Serialized REP data (hex): ";
-    for (unsigned char c : buf) {
-        std::cout << std::hex << (int)c << " ";
-    }
-    std::cout << std::dec << std::endl;
 }
 
 std::vector<unsigned char> deserialize_vector(const std::vector<uint8_t>& buf, std::size_t& offset) {
@@ -487,9 +482,13 @@ Forwarding_RDP_format deserialize_forwarding_data(const std::vector<uint8_t>& bu
         len |= buf[offset + 3] << 24;
         offset += 4;
 
-        // 異常な長さを検出
-        if (len > buf.size()) throw std::runtime_error("deserialize_fowarding_data Invalid string length detected");
+        std::cout << "len size" << len <<std::endl;
 
+        // 異常な長さを検出
+        if (len > buf.size()){ 
+            std::cerr << "Invalid string length detected: len = " << len << ", buf.size() = " << buf.size() << std::endl;
+            throw std::runtime_error("deserialize_fowarding_data Invalid string length detected");
+        }
         if (offset + len > buf.size()) throw std::runtime_error("Buffer underflow while reading string data");
         std::string result(buf.begin() + offset, buf.begin() + offset + len);
         offset += len;
@@ -553,9 +552,9 @@ Forwarding_RDP_format deserialize_forwarding_data(const std::vector<uint8_t>& bu
 
     return deserialized_rdp;
 }
-
-Forwarding_REP_format deserialize_forwarding_rep_data(const std::vector<uint8_t>& buf) {
-    Forwarding_REP_format deserialized_rep;
+//REP専用のデシリアライズ関数
+Forwarding_REP_format deserialize_forwarding_rep(const std::vector<uint8_t>& buf) {
+    Forwarding_REP_format rep;
     std::size_t offset = 0;
 
     auto deserialize_string = [&buf, &offset]() {
@@ -567,9 +566,7 @@ Forwarding_REP_format deserialize_forwarding_rep_data(const std::vector<uint8_t>
         len |= buf[offset + 3] << 24;
         offset += 4;
 
-        if (len > buf.size()) throw std::runtime_error("Invalid string length detected");
         if (offset + len > buf.size()) throw std::runtime_error("Buffer underflow while reading string data");
-
         std::string result(buf.begin() + offset, buf.begin() + offset + len);
         offset += len;
         return result;
@@ -577,29 +574,31 @@ Forwarding_REP_format deserialize_forwarding_rep_data(const std::vector<uint8_t>
 
     // type のデシリアライズ
     if (offset >= buf.size()) throw std::runtime_error("Buffer underflow while reading type");
-    deserialized_rep.type = static_cast<MessageType>(buf[offset]);
+    rep.type = static_cast<MessageType>(buf[offset]);
     offset += 1;
 
-    deserialized_rep.dest_ip = deserialize_string();
+    // dest_ip のデシリアライズ
+    rep.dest_ip = deserialize_string();
 
     // Certificate_Format のデシリアライズ
-    deserialized_rep.cert.own_ip = deserialize_string();
-    deserialized_rep.cert.own_public_key = deserialize_string();
-    deserialized_rep.cert.t = deserialize_string();
-    deserialized_rep.cert.expires = deserialize_string();
+    rep.cert.own_ip = deserialize_string();
+    rep.cert.own_public_key = deserialize_string();
+    rep.cert.t = deserialize_string();
+    rep.cert.expires = deserialize_string();
 
     // n のデシリアライズ
     if (offset + 4 > buf.size()) throw std::runtime_error("Buffer underflow while reading int32");
-    deserialized_rep.n = 0;
-    deserialized_rep.n |= buf[offset + 0] << 0;
-    deserialized_rep.n |= buf[offset + 1] << 8;
-    deserialized_rep.n |= buf[offset + 2] << 16;
-    deserialized_rep.n |= buf[offset + 3] << 24;
+    rep.n = 0;
+    rep.n |= buf[offset + 0] << 0;
+    rep.n |= buf[offset + 1] << 8;
+    rep.n |= buf[offset + 2] << 16;
+    rep.n |= buf[offset + 3] << 24;
     offset += 4;
 
-    deserialized_rep.t = deserialize_string();
+    // t のデシリアライズ
+    rep.t = deserialize_string();
 
-    // 署名のデシリアライズ
+    // signature のデシリアライズ
     if (offset + 4 > buf.size()) throw std::runtime_error("Buffer underflow while reading signature length");
     std::uint32_t sig_len = 0;
     sig_len |= buf[offset + 0] << 0;
@@ -608,7 +607,7 @@ Forwarding_REP_format deserialize_forwarding_rep_data(const std::vector<uint8_t>
     sig_len |= buf[offset + 3] << 24;
     offset += 4;
     if (offset + sig_len > buf.size()) throw std::runtime_error("Buffer underflow while reading signature data");
-    deserialized_rep.signature = std::vector<unsigned char>(buf.begin() + offset, buf.begin() + offset + sig_len);
+    rep.signature = std::vector<unsigned char>(buf.begin() + offset, buf.begin() + offset + sig_len);
     offset += sig_len;
 
     // receiver_signature のデシリアライズ
@@ -620,16 +619,16 @@ Forwarding_REP_format deserialize_forwarding_rep_data(const std::vector<uint8_t>
     receiver_sig_len |= buf[offset + 3] << 24;
     offset += 4;
     if (offset + receiver_sig_len > buf.size()) throw std::runtime_error("Buffer underflow while reading receiver signature data");
-    deserialized_rep.receiver_signature = std::vector<unsigned char>(buf.begin() + offset, buf.begin() + offset + receiver_sig_len);
+    rep.receiver_signature = std::vector<unsigned char>(buf.begin() + offset, buf.begin() + offset + receiver_sig_len);
     offset += receiver_sig_len;
 
     // receiver_cert のデシリアライズ
-    deserialized_rep.receiver_cert.own_ip = deserialize_string();
-    deserialized_rep.receiver_cert.own_public_key = deserialize_string();
-    deserialized_rep.receiver_cert.t = deserialize_string();
-    deserialized_rep.receiver_cert.expires = deserialize_string();
+    rep.receiver_cert.own_ip = deserialize_string();
+    rep.receiver_cert.own_public_key = deserialize_string();
+    rep.receiver_cert.t = deserialize_string();
+    rep.receiver_cert.expires = deserialize_string();
 
-    return deserialized_rep;
+    return rep;
 }
 
 std::string certificate_to_string(const Certificate_Format& cert) {
@@ -641,7 +640,7 @@ std::string certificate_to_string(const Certificate_Format& cert) {
     return certStream.str();
 }
 
-// 署名付きメッセージをデシリアライズする関数
+// 署名付きメッセージを分割する関数
 std::tuple<std::string, std::vector<unsigned char>, std::string> split_sign_message(const std::string& signed_message) {
     std::string delimiter = "Message-with-public-key-end";
     size_t pos = signed_message.find(delimiter);
@@ -891,6 +890,8 @@ std::tuple<std::vector<uint8_t>, std::string> receving_process(int sock) {
     std::cout << "-----------------------------------receive data--------------------------------------" << std::endl;
     std::cout << "Received data size: " << recv_buf.size() << " bytes" << std::endl;
 
+    std::cout << std::dec << std::endl;
+
     return {recv_buf, sender_ip};
 }
 
@@ -951,16 +952,22 @@ int main() {
         }
         
         try {
+            //REPかRDPかを判断。
+            std::string packet_type = get_packet_type(recv_buf);
+            std::cout << "packet_type: " << packet_type << std::endl;
+            std::cout.flush();
 
-            Forwarding_RDP_format deserialized_rdp = deserialize_forwarding_data(recv_buf);
-            std::cout << "deserialize_rdp.type:" << static_cast<int>(deserialized_rdp.rdp.type)<< std::endl;
-            
+            if(packet_type == "RDP")
+            {
+                Forwarding_RDP_format deserialized_rdp = deserialize_forwarding_data(recv_buf);
+                std::cout << "deserialize_rdp.type:" << static_cast<int>(deserialized_rdp.rdp.type)<< std::endl;
+                
 
-            //Forwarding RDP formatからtime stamp:tとnonce:nをタプルで取得
-            std::tuple<std::string, std::string, std::uint32_t> time_and_nonce_and_ipaddress = get_time_nonce_address(deserialized_rdp.rdp.t, sender_ip, deserialized_rdp.rdp.n);
-            std::cout << "Receving time_stamp:" << std::get<0>(time_and_nonce_and_ipaddress) << std::endl;
-            std::cout << "Receving IP_address:"<< std::get<1>(time_and_nonce_and_ipaddress) << std::endl;
-            std::cout << "Receving nonce:"<< std::get<2>(time_and_nonce_and_ipaddress) << std::endl;
+                //Forwarding RDP formatからtime stamp:tとnonce:nをタプルで取得
+                std::tuple<std::string, std::string, std::uint32_t> time_and_nonce_and_ipaddress = get_time_nonce_address(deserialized_rdp.rdp.t, sender_ip, deserialized_rdp.rdp.n);
+                std::cout << "Receving time_stamp:" << std::get<0>(time_and_nonce_and_ipaddress) << std::endl;
+                std::cout << "Receving IP_address:"<< std::get<1>(time_and_nonce_and_ipaddress) << std::endl;
+                std::cout << "Receving nonce:"<< std::get<2>(time_and_nonce_and_ipaddress) << std::endl;
             
             // 受信したメッセージのtime stamp:tとnonce:nが既に受信したものかどうかを確認する
             if(deserialized_rdp.rdp.type == MessageType::RDP) 
@@ -988,6 +995,7 @@ int main() {
                 }
                 std::cout << "Signature verification succeeded!" << std::endl;
             }
+            
             // 宛先確認
             if (deserialized_rdp.rdp.dest_ip == own_ip_address) {
                 std::cout << "This message is for me." << std::endl;
@@ -1016,7 +1024,7 @@ int main() {
                 
                 // REPをシリアライズ
                 std::vector<uint8_t> rep_buf;
-                REP_serialize_data(rep, rep_buf);
+                serialize_forwarding_rep(rep, rep_buf);
 
                 // REPを送信(宛先は一つ前の端末に向けて送信)
                 struct sockaddr_in rep_addr;
@@ -1044,31 +1052,11 @@ int main() {
                 // 受信したメッセージの中に転送端末の署名および証明書がないかを確認
                 if (!deserialized_rdp.receiver_signature.empty() && !deserialized_rdp.receiver_cert.own_ip.empty()) {
                     std::cout << "Forwarder signature and certificate found. Removing them..." << std::endl;
-                    // 転送端末の署名および証明書を取り除く
-                    /*
-                    std::cout << "Before removal:" << std::endl;
-                    std::cout << "receiver_signature (hex):" << std::endl;
-                    for (unsigned char c : deserialized_rdp.receiver_signature) {
-                        std::cout << std::hex << (int)c << " ";
-                    }
-                    std::cout << std::dec << std::endl;
-                    */
                     std::cout << "receiver_cert.own_ip:" << deserialized_rdp.receiver_cert.own_ip << std::endl;
 
                     // 転送端末の署名および証明書を取り除く
                     deserialized_rdp.receiver_signature.clear();
                     deserialized_rdp.receiver_cert = Certificate_Format();
-
-                    // 転送端末の署名および証明書を取り除いた後のデバッグ出力
-                    /*
-                    std::cout << "After removal:" << std::endl;
-                    std::cout << "receiver_signature (hex):" << std::endl;
-                    for (unsigned char c : deserialized_rdp.receiver_signature) {
-                        std::cout << std::hex << (int)c << " ";
-                    }
-                    std::cout << std::dec << std::endl;
-                    */
-                    //std::cout << "receiver_cert.own_ip:" << deserialized_rdp.receiver_cert.own_ip << std::endl;
                 } else {
                     std::cout << "Forwarder signature and certificate not found." << std::endl;
                 }
@@ -1141,6 +1129,7 @@ int main() {
                     //REPならユニキャスト転送する, next_ipは一つ前の端末のIPアドレスで設定する必要がある
                     unicast_send_process(send_buf, next_ip);
                 }  
+            }
             }
         } catch (const std::exception& e) {
             std::cerr << "Error during deserialization: " << e.what() << std::endl;
