@@ -546,17 +546,10 @@ int main() {
     
     // 署名対象メッセージを作成
     std::string message = construct_message(test_rdp1);
-    std::cout << "-------------------------------------Message-------------------------------------: " << std::endl;
-    std::cout << message << std::endl;
-    std::cout << "-------------------------------------Message-End-------------------------------------: " << std::endl;
-
+    
     test_rdp1.rdp.signature = signMessage(private_key, message);
     if (test_rdp1.rdp.signature.empty()) return -1;
-
-    std::cout << "-------------------------------------Signature-------------------------------------: " << std::endl;
-    for (unsigned char c : test_rdp1.rdp.signature) {
-        std::cout << std::hex << (int)c << " ";
-    }
+    
     std::cout << std::dec << std::endl;
 
     // シリアライズ処理
