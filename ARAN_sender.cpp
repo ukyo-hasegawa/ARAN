@@ -103,36 +103,37 @@ int send_process(std::vector<uint8_t> buf) {
     }
 }
 
-std::vector<uint8_t> receving_process(int sock) {
-    // ブロードキャスト受信の設定
-    //int sock;
-    struct sockaddr_in addr;
-    char buf[2048];
-    
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(12345);
-    addr.sin_addr.s_addr = INADDR_ANY;
+std::tuple<std::vector<uint8_t>, std::string> receving_process(int sock) {
+    //std::cout << "receive process start" << std::endl;
 
-    //受信処理
     struct sockaddr_in sender_addr;
     socklen_t addr_len = sizeof(sender_addr);
+    char buf[2048];
     memset(buf, 0, sizeof(buf));
+
     ssize_t received_bytes = recvfrom(sock, buf, sizeof(buf), 0, reinterpret_cast<struct sockaddr*>(&sender_addr), &addr_len);
     
     if (received_bytes < 0) {
         //std::cerr << "Failed to receive data" << std::endl;
-        return {};
+        return std::make_tuple(std::vector<unsigned char>(), std::string());
     }
 
+    // 送信元IPアドレスを取得
+    std::string sender_ip = inet_ntoa(sender_addr.sin_addr);
+    
     // 受信データを std::vector<uint8_t> に変換
     std::vector<uint8_t> recv_buf(buf, buf + received_bytes);
 
     std::cout << "-----------------------------------receive data--------------------------------------" << std::endl;
 
-    std::cout << "Received data size: " << recv_buf.size() << " bytes" << std::endl;
 
-    return recv_buf;
+    std::cout << "Received data size: " << recv_buf.size() << " bytes" << std::endl;
+    std::cout << std::dec << std::endl; // 10進数に戻す
+
+
+    return {recv_buf, sender_ip};
 }
+
 
 std::string certificate_to_string(const Certificate_Format& cert) {
     std::ostringstream certStream;
@@ -575,7 +576,11 @@ int main() {
         socklen_t addr_len = sizeof(sender_addr);
         memset(recive_buf, 0, sizeof(recive_buf));
         
-        std::vector<uint8_t> recv_buf = receving_process(sock);
+        std::vector<uint8_t> recv_buf;
+        std::string sender_ip;
+
+        // 受信処理
+        std::tie(recv_buf, sender_ip) = receving_process(sock);
         
     }
 

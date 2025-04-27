@@ -1074,6 +1074,7 @@ int main() {
                     std::cerr << "Failed to sign the message" << std::endl;
                     return 1;
                 }
+                
                 deserialized_rdp.receiver_signature = signature;
             
                 // 転送端末の証明書を作成
@@ -1112,6 +1113,8 @@ int main() {
                     // 転送端末の署名および証明書を取り除く
                     deserialized_rep.receiver_signature.clear();
                     deserialized_rep.receiver_cert = Certificate_Format();
+                } else {
+                    std::cout << "Forwarder signature and certificate not found." << std::endl;
                 }
 
                     std::string signed_message = construct_message_with_key(deserialized_rep, get_PublicKey_As_String(public_key));
