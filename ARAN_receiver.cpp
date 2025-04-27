@@ -1073,8 +1073,10 @@ int main() {
                     //RDPならブロードキャスト転送する。
                     broadcast_send_process(send_buf);
                 
-                } else if (deserialized_rdp.rdp.type == MessageType::REP) {
-                    // 一つ前の端末に向けて送信する.
+                }  
+            }
+            } else if(static_cast<int>(packet_type) == 2)
+            {// 一つ前の端末に向けて送信する.
                     //REPの作成
                     std::cout << "-------------------------------------Forwarding REP-------------------------------------" << std::endl;
                     //time stampとnonceから対応するIPアドレスを取得
@@ -1117,10 +1119,7 @@ int main() {
                     // Forwarding_RDP_format をシリアライズ
                     serialize_data(deserialized_rdp, send_buf);
                     //REPならユニキャスト転送する, next_ipは一つ前の端末のIPアドレスで設定する必要がある
-                    unicast_send_process(send_buf, next_ip);
-                }  
-            }
-            }
+                    unicast_send_process(send_buf, next_ip);}
         } catch (const std::exception& e) {
             std::cerr << "Error during deserialization: " << e.what() << std::endl;
         }
