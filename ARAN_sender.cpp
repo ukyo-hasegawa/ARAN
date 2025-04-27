@@ -567,7 +567,7 @@ int main() {
     }
 
     
-
+    std::cout << "-------------------------------------Waiting for data-------------------------------------: " << std::endl;
     while (true)
     {
         //受信処理
@@ -576,6 +576,7 @@ int main() {
         memset(recive_buf, 0, sizeof(recive_buf));
         
         std::vector<uint8_t> recv_buf = receving_process(sock);
+        
     }
 
     EVP_PKEY_free(private_key);
