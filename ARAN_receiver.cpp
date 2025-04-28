@@ -1034,6 +1034,7 @@ int main() {
                     rep_addr.sin_family = AF_INET;
                     rep_addr.sin_port = htons(12345);
                     std::cout << "Send REP to : " << sender_ip<< std::endl;
+                    std::cout << "Send REP size:" << rep_buf.size() << std::endl; 
                     rep_addr.sin_addr.s_addr = inet_addr(sender_ip.c_str());
 
                     int rep_sock = socket(AF_INET, SOCK_DGRAM, 0);
@@ -1045,6 +1046,7 @@ int main() {
                         perror("sendto failed for REP");
                     } else {
                         std::cout << "---------------------------REP sent successfully to " << sender_ip <<"------------------------------" << std::endl;
+
                     }
 
                     close(rep_sock);
