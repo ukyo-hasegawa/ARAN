@@ -53,6 +53,17 @@ Forwarding_RDP_format Makes_RDP(RDP_format RDP, std::vector<unsigned char> recei
     return rdp;
 }
 
+struct Forwarding_REP_format {
+    MessageType type;
+    std::string dest_ip;
+    Certificate_Format cert;
+    std::uint32_t n;
+    std::string t;
+    std::vector<unsigned char> signature;
+    std::vector<unsigned char> receiver_signature;
+    Certificate_Format receiver_cert;
+};
+
 Certificate_Format Makes_Certificate(std::string own_ip, std::string own_public_key, std::string t, std::string expires) {
     Certificate_Format Certificate;
     Certificate.own_ip = own_ip;
@@ -62,15 +73,13 @@ Certificate_Format Makes_Certificate(std::string own_ip, std::string own_public_
     return Certificate;
 }
 
-std::string get_packet_type(const std::vector<uint8_t>& buf) {
-    if (buf.size() < 4) {
+MessageType get_packet_type(const std::vector<uint8_t>& buf) {
+    if (buf.size() < 1) {
         throw std::runtime_error("Buffer too small to determine packet type");
     }
 
-    // パケットの先頭4バイトを文字列として取得
-    std::string type(buf.begin(), buf.begin() + 4);
-
-    return type;
+    // バッファの先頭1バイトを MessageType に変換
+    return static_cast<MessageType>(buf[0]);
 }
 
 int send_process(std::vector<uint8_t> buf) {
@@ -291,6 +300,85 @@ RDP_format deserialize_data(const std::vector<uint8_t>& buf) {
     return deserialized_rdp;
 }
 
+//REP専用のデシリアライズ関数
+Forwarding_REP_format deserialize_forwarding_rep(const std::vector<uint8_t>& buf) {
+    Forwarding_REP_format rep;
+    std::size_t offset = 0;
+
+    auto deserialize_string = [&buf, &offset]() {
+        if (offset + 4 > buf.size()) throw std::runtime_error("Buffer underflow while reading string length");
+        std::uint32_t len = 0;
+        len |= buf[offset + 0] << 0;
+        len |= buf[offset + 1] << 8;
+        len |= buf[offset + 2] << 16;
+        len |= buf[offset + 3] << 24;
+        offset += 4;
+
+        if (offset + len > buf.size()) throw std::runtime_error("Buffer underflow while reading string data");
+        std::string result(buf.begin() + offset, buf.begin() + offset + len);
+        offset += len;
+        return result;
+    };
+
+    // type のデシリアライズ
+    if (offset >= buf.size()) throw std::runtime_error("Buffer underflow while reading type");
+    rep.type = static_cast<MessageType>(buf[offset]);
+    offset += 1;
+
+    // dest_ip のデシリアライズ
+    rep.dest_ip = deserialize_string();
+
+    // Certificate_Format のデシリアライズ
+    rep.cert.own_ip = deserialize_string();
+    rep.cert.own_public_key = deserialize_string();
+    rep.cert.t = deserialize_string();
+    rep.cert.expires = deserialize_string();
+
+    // n のデシリアライズ
+    if (offset + 4 > buf.size()) throw std::runtime_error("Buffer underflow while reading int32");
+    rep.n = 0;
+    rep.n |= buf[offset + 0] << 0;
+    rep.n |= buf[offset + 1] << 8;
+    rep.n |= buf[offset + 2] << 16;
+    rep.n |= buf[offset + 3] << 24;
+    offset += 4;
+
+    // t のデシリアライズ
+    rep.t = deserialize_string();
+
+    // signature のデシリアライズ
+    if (offset + 4 > buf.size()) throw std::runtime_error("Buffer underflow while reading signature length");
+    std::uint32_t sig_len = 0;
+    sig_len |= buf[offset + 0] << 0;
+    sig_len |= buf[offset + 1] << 8;
+    sig_len |= buf[offset + 2] << 16;
+    sig_len |= buf[offset + 3] << 24;
+    offset += 4;
+    if (offset + sig_len > buf.size()) throw std::runtime_error("Buffer underflow while reading signature data");
+    rep.signature = std::vector<unsigned char>(buf.begin() + offset, buf.begin() + offset + sig_len);
+    offset += sig_len;
+
+    // receiver_signature のデシリアライズ
+    if (offset + 4 > buf.size()) throw std::runtime_error("Buffer underflow while reading receiver signature length");
+    std::uint32_t receiver_sig_len = 0;
+    receiver_sig_len |= buf[offset + 0] << 0;
+    receiver_sig_len |= buf[offset + 1] << 8;
+    receiver_sig_len |= buf[offset + 2] << 16;
+    receiver_sig_len |= buf[offset + 3] << 24;
+    offset += 4;
+    if (offset + receiver_sig_len > buf.size()) throw std::runtime_error("Buffer underflow while reading receiver signature data");
+    rep.receiver_signature = std::vector<unsigned char>(buf.begin() + offset, buf.begin() + offset + receiver_sig_len);
+    offset += receiver_sig_len;
+
+    // receiver_cert のデシリアライズ
+    rep.receiver_cert.own_ip = deserialize_string();
+    rep.receiver_cert.own_public_key = deserialize_string();
+    rep.receiver_cert.t = deserialize_string();
+    rep.receiver_cert.expires = deserialize_string();
+
+    return rep;
+}
+
 // 秘密鍵を読み込む
 EVP_PKEY* load_private_key(const std::string& filename) {
     FILE* file = fopen(filename.c_str(), "rb");
@@ -505,6 +593,27 @@ int main() {
     char recive_buf[2048];
     int sock;
 
+    // ソケット作成
+    sock = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sock < 0) {
+        std::cerr << "Failed to create socket" << std::endl;
+        return 1;
+    }
+
+    // バインド処理
+    struct sockaddr_in addr;
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(12345); // ポート番号
+    addr.sin_addr.s_addr = INADDR_ANY; // すべてのインターフェースで受信
+
+    if (bind(sock, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+        std::cerr << "Failed to bind socket" << std::endl;
+        close(sock);
+        return 1;
+    }
+
+    std::cout << "bind success" << std::endl;
+
     // 公開鍵の取得
     EVP_PKEY* public_key = load_public_key("public_key.pem");
     if (!public_key) return 1;
@@ -530,8 +639,8 @@ int main() {
     // RDP_format オブジェクトを作成
     RDP_format rdp = {
         MessageType::RDP,
-        "10.0.0.1",
-        "10.0.0.3",
+        "10.0.0.1", // 送信元IP
+        "10.0.0.3", // 宛先IP
         test_cert1,
         std::random_device()(),
         Formatted_Time,
@@ -555,29 +664,62 @@ int main() {
     // シリアライズ処理
     std::vector<uint8_t> buf;
     serialize_forwarding_data(test_rdp1, buf);
-
-    if(send_process(buf)) {
+    
+    // データ送信
+    if (send_process(buf)) {
         std::cout << "Message sent successfully" << std::endl;
     }
 
-    
-    std::cout << "-------------------------------------Waiting for data-------------------------------------: " << std::endl;
-    while (true)
-    {
-        //受信処理
-        struct sockaddr_in sender_addr;
-        socklen_t addr_len = sizeof(sender_addr);
-        memset(recive_buf, 0, sizeof(recive_buf));
-        
+    // レスポンス受信
+    std::cout << "-------------------------------------Waiting for response-------------------------------------" << std::endl;
+    while (true) {
+        // 受信処理
         std::vector<uint8_t> recv_buf;
         std::string sender_ip;
 
         // 受信処理
         std::tie(recv_buf, sender_ip) = receving_process(sock);
-        
+        std::cout << "sender_ip: " << sender_ip << std::endl;
+
+        try {
+            // パケットタイプを取得
+            MessageType packet_type = get_packet_type(recv_buf);
+            std::cout << "Received packet_type: " << static_cast<int>(packet_type) << std::endl;
+
+            if (packet_type == MessageType::REP) {
+                // REP メッセージのデシリアライズ
+                Forwarding_REP_format deserialized_rep = deserialize_forwarding_rep(recv_buf);
+
+                // REP メッセージの内容をログに出力
+                std::cout << "Received REP:" << std::endl;
+                std::cout << "  Type: " << static_cast<int>(deserialized_rep.type) << std::endl;
+                std::cout << "  Destination IP: " << deserialized_rep.dest_ip << std::endl;
+                std::cout << "  Certificate Own IP: " << deserialized_rep.cert.own_ip << std::endl;
+                std::cout << "  Certificate Public Key: " << deserialized_rep.cert.own_public_key << std::endl;
+                std::cout << "  Certificate Timestamp: " << deserialized_rep.cert.t << std::endl;
+                std::cout << "  Certificate Expiration: " << deserialized_rep.cert.expires << std::endl;
+                std::cout << "  Nonce: " << deserialized_rep.n << std::endl;
+                std::cout << "  Timestamp: " << deserialized_rep.t << std::endl;
+                std::cout << "  Signature Size: " << deserialized_rep.signature.size() << std::endl;
+                std::cout << "  Receiver Signature Size: " << deserialized_rep.receiver_signature.size() << std::endl;
+                std::cout << "  Receiver Certificate Own IP: " << deserialized_rep.receiver_cert.own_ip << std::endl;
+                std::cout << "  Receiver Certificate Public Key: " << deserialized_rep.receiver_cert.own_public_key << std::endl;
+                std::cout << "  Receiver Certificate Timestamp: " << deserialized_rep.receiver_cert.t << std::endl;
+                std::cout << "  Receiver Certificate Expiration: " << deserialized_rep.receiver_cert.expires << std::endl;
+
+                break; // レスポンスを受信したらループを終了
+            } else {
+                std::cout << "Received non-REP message. Ignoring..." << std::endl;
+            }
+        } catch (const std::exception& e) {
+            std::cerr << "Error during response processing: " << e.what() << std::endl;
+        }
     }
 
+    // リソース解放
     EVP_PKEY_free(private_key);
     EVP_PKEY_free(public_key);
+    close(sock);
+
     return 0;
 }

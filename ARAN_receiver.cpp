@@ -679,13 +679,11 @@ std::string construct_message_with_key(const Forwarding_RDP_format& deserialized
     std::ostringstream messageStream;
     messageStream << static_cast<int>(deserialized_rdp.rdp.type) << "|\n"
                   << deserialized_rdp.rdp.dest_ip << "|\n" 
-                  << certificate_to_string(deserialized_rdp.rdp.cert) << "|\n"<< deserialized_rdp.rdp.n << "|\n"
+                  << certificate_to_string(deserialized_rdp.rdp.cert) << "|\n"
+                  << deserialized_rdp.rdp.n << "|\n"
                   << deserialized_rdp.rdp.t << "|\n"
                   << public_key_str  // 公開鍵を追加
                   << "Message-with-public-key-end\n"; 
-
-    //std::cout << messageStream.str() << std::endl;
-    
     return messageStream.str();
 }
 
@@ -1092,6 +1090,14 @@ int main() {
             } else if(static_cast<int>(packet_type) == 2){
                 // REPのデシリアライズ
                 Forwarding_REP_format deserialized_rep = deserialize_forwarding_rep(recv_buf);
+                std::cout << "deserialize_rep.type:" << static_cast<int>(deserialized_rep.type)<< std::endl;
+                std::cout << "deserialize_rep.dest_ip:" << deserialized_rep.dest_ip << std::endl;
+                std::cout << "deserialize_rep.cert.own_ip" << deserialized_rep.cert.own_ip << std::endl;
+                std::cout << "deserialize_rep.cert.own_public_key:"<< deserialized_rep.cert.own_public_key << std::endl;
+                std::cout << "deserialize_rep.n:" << deserialized_rep.n << std::endl;
+                std::cout << "deserialize_rep.cert.t:"<< deserialized_rep.cert.t << std::endl;
+                std::cout << "deserialize_rep.signature.size:"<< deserialized_rep.signature.size() << std::endl;
+                std::cout << "deserialize_rep.cert.expires:" << deserialized_rep.cert.expires << std::endl;
                 std::cout << "-------------------------------------Forwarding REP-------------------------------------" << std::endl;
                 //time stampとnonceから対応するIPアドレスを取得
                 auto it = std::find_if(received_messages.begin(), received_messages.end(),
