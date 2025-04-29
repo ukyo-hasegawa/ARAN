@@ -662,7 +662,7 @@ int main() {
     std::cout << std::dec << std::endl;
 
     // シリアライズ処理
-    std::vector<uint8_t> buf;
+    std::vector<uint8_t> buf(8192);
     serialize_forwarding_data(test_rdp1, buf);
     
     // データ送信
