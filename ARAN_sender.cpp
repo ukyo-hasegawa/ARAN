@@ -23,20 +23,20 @@ enum class MessageType : uint8_t {
 };
 
 struct Certificate_Format {
-    std::string own_ip;
+    std::string own_ip[16];
     std::string own_public_key;
-    std::string t;
-    std::string expires;
+    std::string t[20];
+    std::string expires[20];
 };
 
 struct RDP_format {
-    MessageType type;
-    std::string source_ip;
-    std::string dest_ip;
+    MessageType type; //1バイト
+    char source_ip[16]; //16バイト
+    char dest_ip[16];
     Certificate_Format cert;
-    std::uint32_t n;
-    std::string t;
-    std::vector<unsigned char> signature;
+    std::uint32_t nonce;
+    char time_stamp[20];
+    std::vector<unsigned char> signature[256];
 };
 
 struct Forwarding_RDP_format {
@@ -144,6 +144,8 @@ std::tuple<std::vector<uint8_t>, std::string> receving_process(int sock) {
 }
 
 
+
+
 std::string certificate_to_string(const Certificate_Format& cert) {
     std::ostringstream certStream;
     certStream << cert.own_ip << "|\n"
@@ -177,10 +179,10 @@ void serialize_data(const RDP_format& test_rdp, std::vector<uint8_t>& buf) {
 
     // nを4バイトにシリアライズ
     for (int i = 0; i < 4; i++) {
-        buf.push_back((test_rdp.n >> (8 * i)) & 0xFF);
+        buf.push_back((test_rdp.nonce >> (8 * i)) & 0xFF);
     }
 
-    serialize_string(test_rdp.t);
+    serialize_string(test_rdp.time_stamp);
 
     // 署名のシリアライズ
     std::uint32_t sig_len = test_rdp.signature.size();
@@ -216,10 +218,10 @@ void serialize_forwarding_data(const Forwarding_RDP_format& forwarding_rdp, std:
 
     // nを4バイトにシリアライズ
     for (int i = 0; i < 4; i++) {
-        buf.push_back((forwarding_rdp.rdp.n >> (8 * i)) & 0xFF);
+        buf.push_back((forwarding_rdp.rdp.nonce >> (8 * i)) & 0xFF);
     }
 
-    serialize_string(forwarding_rdp.rdp.t);
+    serialize_string(forwarding_rdp.rdp.time_stamp);
 
     // 署名のシリアライズ
     std::uint32_t sig_len = forwarding_rdp.rdp.signature.size();
@@ -287,14 +289,14 @@ RDP_format deserialize_data(const std::vector<uint8_t>& buf) {
 
     // n のデシリアライズ
     if (offset + 4 > buf.size()) throw std::runtime_error("Buffer underflow while reading int32");
-    deserialized_rdp.n = 0;
-    deserialized_rdp.n |= buf[offset + 0] << 0;
-    deserialized_rdp.n |= buf[offset + 1] << 8;
-    deserialized_rdp.n |= buf[offset + 2] << 16;
-    deserialized_rdp.n |= buf[offset + 3] << 24;
+    deserialized_rdp.nonce = 0;
+    deserialized_rdp.nonce |= buf[offset + 0] << 0;
+    deserialized_rdp.nonce |= buf[offset + 1] << 8;
+    deserialized_rdp.nonce |= buf[offset + 2] << 16;
+    deserialized_rdp.nonce |= buf[offset + 3] << 24;
     offset += 4;
 
-    deserialized_rdp.t = deserialize_string();
+    deserialized_rdp.time_stamp = deserialize_string();
     deserialized_rdp.signature = deserialize_vector();
 
     return deserialized_rdp;
@@ -495,8 +497,8 @@ std::string construct_message(const Forwarding_RDP_format& deserialized_rdp) {
     messageStream << static_cast<int>(deserialized_rdp.rdp.type) << "|\n"
                   << deserialized_rdp.rdp.dest_ip << "|\n" 
                   << certificate_to_string(deserialized_rdp.rdp.cert) << "|\n"
-                  << deserialized_rdp.rdp.n << "|\n"
-                  << deserialized_rdp.rdp.t << "|\n";
+                  << deserialized_rdp.rdp.nonce << "|\n"
+                  << deserialized_rdp.rdp.time_stamp << "|\n";
     return messageStream.str();
 }
 
@@ -505,8 +507,8 @@ std::string construct_message_with_key(const RDP_format& deserialized_rdp, const
     std::ostringstream messageStream;
     messageStream <<static_cast<int>(deserialized_rdp.type)<< "|\n"
                   << deserialized_rdp.dest_ip << "|\n" 
-                  << certificate_to_string(deserialized_rdp.cert) << "|\n"<< deserialized_rdp.n << "|\n"
-                  << deserialized_rdp.t << "|\n"
+                  << certificate_to_string(deserialized_rdp.cert) << "|\n"<< deserialized_rdp.nonce << "|\n"
+                  << deserialized_rdp.time_stamp << "|\n"
                   << public_key_str  // 公開鍵を追加
                   << "Message-with-public-key-end\n"; 
 
@@ -590,7 +592,7 @@ int main() {
     Forwarding_RDP_format test_rdp1;
     RDP_format rdp1;
     Certificate_Format test_cert1;
-    char recive_buf[8192];
+    char recive_buf[2048];
     int sock;
 
     // ソケット作成
@@ -662,7 +664,7 @@ int main() {
     std::cout << std::dec << std::endl;
 
     // シリアライズ処理
-    std::vector<uint8_t> buf(8192);
+    std::vector<uint8_t> buf(2048);
     serialize_forwarding_data(test_rdp1, buf);
     
     // データ送信

@@ -1,0 +1,12 @@
+ARANのパケットフォーマットに関して
+
+RDP 
+struct RDP_format {
+    MessageType type; 
+    std::string source_ip;
+    std::string dest_ip;
+    Certificate_Format cert;
+    std::uint32_t n;
+    std::string t;
+    std::vector<unsigned char> signature;
+};

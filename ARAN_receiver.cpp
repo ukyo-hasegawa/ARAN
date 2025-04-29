@@ -25,7 +25,7 @@ enum class MessageType : uint8_t {
 };
 
 struct Certificate_Format {
-    std::string own_ip;
+    std::string own_ip[16];
     std::string own_public_key;
     std::string t;
     std::string expires;
@@ -36,13 +36,13 @@ struct Certificate_Format {
 };
 
 struct RDP_format {
-    MessageType type;
-    std::string source_ip;
-    std::string dest_ip;
+    MessageType type; //1バイト
+    char source_ip[16]; //16バイト
+    char dest_ip[16];
     Certificate_Format cert;
-    std::uint32_t n;
-    std::string t;
-    std::vector<unsigned char> signature;
+    std::uint32_t nonce;
+    char time_stamp[20];
+    std::vector<unsigned char> signature[256];
 };
 
 struct Forwarding_RDP_format {
@@ -702,16 +702,28 @@ std::string construct_message_with_key(const Forwarding_REP_format& deserialized
     return messageStream.str();
 }
 
-// 現在時刻の取得
-std::string get_time(){
+std::string get_time(bool forceError = false) {
+    if (forceError) {
+        std::cerr << "Forced error: Failed to get local time" << std::endl;
+        return std::string(20, '\0'); // エラー時は20バイトのヌル文字列を返す
+    }
+
     auto now = std::chrono::system_clock::now();
     std::time_t currentTime = std::chrono::system_clock::to_time_t(now);
     std::tm* localTime = std::localtime(&currentTime);
-    std::ostringstream timeStream;
-    timeStream << std::put_time(localTime, "%Y-%m-%d %H:%M:%S");
-    std::string formattedTime = timeStream.str();
-    return formattedTime;
+
+    // 時刻をフォーマット
+    char formattedTime[20] = {};
+    if (localTime) {
+        std::strftime(formattedTime, sizeof(formattedTime), "%Y-%m-%d %H:%M:%S", localTime);
+    } else {
+        std::cerr << "Failed to get local time" << std::endl;
+        return std::string(20, '\0'); // エラー時は20バイトのヌル文字列を返す
+    }
+
+    return std::string(formattedTime); // std::string に変換して返す
 }
+
 
 std::string calculateExpirationTime(int durationHours, const std::string& formattedTime) {
     // formattedTimeをstd::tmに変換
@@ -897,7 +909,7 @@ int main() {
     // ブロードキャスト受信の設定
     int sock;
     struct sockaddr_in addr;
-    char buf[8192];
+    char buf[2048];
     std::string own_ip_address = get_own_ip();
     std::string dest_ip = "";
     std::string next_ip = "";
