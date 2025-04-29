@@ -167,5 +167,11 @@ int main() {
     std::cout << "Deserialized time_stamp: " << deserialized.time_stamp << "\n";
     std::cout << "Original signature[0]: " << static_cast<int>(original.signature[0][0]) << "\n";
     std::cout << "Deserialized signature[0]: " << static_cast<int>(deserialized.signature[0][0]) << "\n";
+    std::cout << "Original cert.own_ip[0]: " << original.cert.own_ip[0] << "\n";
+    std::cout << "Deserialized cert.own_ip[0]: " << deserialized.cert.own_ip[0] << "\n";
+    std::cout << "Original cert.t[0]: " << original.cert.t[0] << "\n";
+    std::cout << "Deserialized cert.t[0]: " << deserialized.cert.t[0] << "\n";
+    std::cout << "Original cert.expires[0]: " << original.cert.expires[0] << "\n";
+    std::cout << "Deserialized cert.expires[0]: " << deserialized.cert.expires[0] << "\n";
     return 0;
 }

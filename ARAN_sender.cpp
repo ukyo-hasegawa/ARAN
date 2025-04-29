@@ -15,6 +15,7 @@
 #include <openssl/pem.h>
 #include <netdb.h>
 #include <ifaddrs.h>
+#include <cstring>
 #include "RSA/RSA.h"
 
 enum class MessageType : uint8_t {
@@ -71,6 +72,119 @@ Certificate_Format Makes_Certificate(std::string own_ip, std::string own_public_
     Certificate.t = t;
     Certificate.expires = expires;
     return Certificate;
+}
+
+void RDP_serialize(const RDP_format& rdp, unsigned char* buf) {
+    size_t offset = 0;
+
+    // Serialize type
+    buf[offset] = static_cast<uint8_t>(rdp.type);
+    offset += sizeof(uint8_t);
+
+    // Serialize source_ip
+    std::memcpy(buf + offset, rdp.source_ip, sizeof(rdp.source_ip));
+    offset += sizeof(rdp.source_ip);
+
+    // Serialize dest_ip
+    std::memcpy(buf + offset, rdp.dest_ip, sizeof(rdp.dest_ip));
+    offset += sizeof(rdp.dest_ip);
+
+    // Serialize cert (own_ip, t, expires)
+    for (const auto& ip : rdp.cert.own_ip) {
+        size_t len = ip.size();
+        std::memcpy(buf + offset, &len, sizeof(len)); // 文字列の長さを保存
+        offset += sizeof(len);
+        std::memcpy(buf + offset, ip.c_str(), len);  // 文字列の内容を保存
+        offset += len;
+    }
+    for (const auto& t : rdp.cert.t) {
+        size_t len = t.size();
+        std::memcpy(buf + offset, &len, sizeof(len));
+        offset += sizeof(len);
+        std::memcpy(buf + offset, t.c_str(), len);
+        offset += len;
+    }
+    for (const auto& expires : rdp.cert.expires) {
+        size_t len = expires.size();
+        std::memcpy(buf + offset, &len, sizeof(len));
+        offset += sizeof(len);
+        std::memcpy(buf + offset, expires.c_str(), len);
+        offset += len;
+    }
+
+    // Serialize nonce
+    std::memcpy(buf + offset, &rdp.nonce, sizeof(rdp.nonce));
+    offset += sizeof(rdp.nonce);
+
+    // Serialize time_stamp
+    std::memcpy(buf + offset, rdp.time_stamp, sizeof(rdp.time_stamp));
+    offset += sizeof(rdp.time_stamp);
+
+    // Serialize signature
+    for (size_t i = 0; i < 256; ++i) {
+        std::memcpy(buf + offset, rdp.signature[i].data(), rdp.signature[i].size());
+        offset += rdp.signature[i].size();
+    }
+}
+
+void RDP_deserialize(const unsigned char* buf, RDP_format& rdp) {
+    size_t offset = 0;
+
+    // Deserialize type
+    rdp.type = static_cast<MessageType>(buf[offset]);
+    offset += sizeof(uint8_t);
+
+    // Deserialize source_ip
+    std::memcpy(rdp.source_ip, buf + offset, sizeof(rdp.source_ip));
+    offset += sizeof(rdp.source_ip);
+
+    // Deserialize dest_ip
+    std::memcpy(rdp.dest_ip, buf + offset, sizeof(rdp.dest_ip));
+    offset += sizeof(rdp.dest_ip);
+
+    // Deserialize cert (own_ip, t, expires)
+    for (auto& ip : rdp.cert.own_ip) {
+        size_t len = 0;
+        std::memcpy(&len, buf + offset, sizeof(len)); // 文字列の長さを取得
+        offset += sizeof(len);
+        char temp[256] = {};
+        std::memcpy(temp, buf + offset, len);        // 文字列の内容を取得
+        offset += len;
+        ip = temp;
+    }
+    for (auto& t : rdp.cert.t) {
+        size_t len = 0;
+        std::memcpy(&len, buf + offset, sizeof(len));
+        offset += sizeof(len);
+        char temp[256] = {};
+        std::memcpy(temp, buf + offset, len);
+        offset += len;
+        t = temp;
+    }
+    for (auto& expires : rdp.cert.expires) {
+        size_t len = 0;
+        std::memcpy(&len, buf + offset, sizeof(len));
+        offset += sizeof(len);
+        char temp[256] = {};
+        std::memcpy(temp, buf + offset, len);
+        offset += len;
+        expires = temp;
+    }
+
+    // Deserialize nonce
+    std::memcpy(&rdp.nonce, buf + offset, sizeof(rdp.nonce));
+    offset += sizeof(rdp.nonce);
+
+    // Deserialize time_stamp
+    std::memcpy(rdp.time_stamp, buf + offset, sizeof(rdp.time_stamp));
+    offset += sizeof(rdp.time_stamp);
+
+    // Deserialize signature
+    for (size_t i = 0; i < 256; ++i) {
+        rdp.signature[i].resize(1); // Assuming 1 byte per signature element
+        std::memcpy(rdp.signature[i].data(), buf + offset, rdp.signature[i].size());
+        offset += rdp.signature[i].size();
+    }
 }
 
 MessageType get_packet_type(const std::vector<uint8_t>& buf) {
@@ -420,16 +534,29 @@ std::string get_PublicKey_As_String(EVP_PKEY* pkey) {
 }
 
 // 現在時刻の取得
-std::string get_time(){
+char Get_time(){
     auto now = std::chrono::system_clock::now();
     std::time_t currentTime = std::chrono::system_clock::to_time_t(now);
     std::tm* localTime = std::localtime(&currentTime);
     std::ostringstream timeStream;
     timeStream << std::put_time(localTime, "%Y-%m-%d %H:%M:%S");
-    std::string formattedTime = timeStream.str();
+    char formattedTime = timeStream.str();
     return formattedTime;
 }
+void set_time_stamp(RDP_format& rdp) {
+    // 現在時刻を取得
+    auto now = std::chrono::system_clock::now();
+    std::time_t currentTime = std::chrono::system_clock::to_time_t(now);
+    std::tm* localTime = std::localtime(&currentTime);
 
+    // 時刻をフォーマット
+    char formattedTime[20];
+    std::strftime(formattedTime, sizeof(formattedTime), "%Y-%m-%d %H:%M:%S", localTime);
+
+    // time_stamp にコピー
+    std::strncpy(rdp.time_stamp, formattedTime, sizeof(rdp.time_stamp) - 1);
+    rdp.time_stamp[sizeof(rdp.time_stamp) - 1] = '\0'; // ヌル終端を保証
+}
 std::string calculateExpirationTime(int durationHours, const std::string& formattedTime) {
     // formattedTimeをstd::tmに変換
     std::tm tm = {};
@@ -625,7 +752,7 @@ int main() {
     if (!private_key) return 1;
 
     // 現在時刻の取得
-    std::string Formatted_Time = get_time();
+    char Formatted_Time = set_time_stamp();
     
     // 有効期限の取得
     std::string expirationTime = calculateExpirationTime(24, Formatted_Time);
