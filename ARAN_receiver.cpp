@@ -897,7 +897,7 @@ int main() {
     // ブロードキャスト受信の設定
     int sock;
     struct sockaddr_in addr;
-    char buf[2048];
+    char buf[8192];
     std::string own_ip_address = get_own_ip();
     std::string dest_ip = "";
     std::string next_ip = "";

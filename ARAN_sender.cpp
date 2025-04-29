@@ -590,7 +590,7 @@ int main() {
     Forwarding_RDP_format test_rdp1;
     RDP_format rdp1;
     Certificate_Format test_cert1;
-    char recive_buf[2048];
+    char recive_buf[8192];
     int sock;
 
     // ソケット作成
