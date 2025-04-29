@@ -1,3 +1,5 @@
+//固定長にしたcertificate_formatのシリアライズとデシリアライズのテストコード
+
 #include <string>
 #include <iostream>
 #include <fstream>
