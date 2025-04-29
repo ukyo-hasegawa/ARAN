@@ -684,7 +684,7 @@ int main() {
         try {
             // パケットタイプを取得
             MessageType packet_type = get_packet_type(recv_buf);
-            std::cout << "Received packet_type: " << static_cast<int>(packet_type) << std::endl;
+            std::cout << "Received packet_type:" << static_cast<int>(packet_type) << std::endl;
 
             if (packet_type == MessageType::REP) {
                 // REP メッセージのデシリアライズ
