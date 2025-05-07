@@ -680,8 +680,8 @@ std::string construct_message_with_key(const Forwarding_RDP_format& deserialized
     messageStream << static_cast<int>(deserialized_rdp.rdp.type) << "|\n"
                   << deserialized_rdp.rdp.dest_ip << "|\n" 
                   << certificate_to_string(deserialized_rdp.rdp.cert) << "|\n"
-                  << deserialized_rdp.rdp.n << "|\n"
-                  << deserialized_rdp.rdp.t << "|\n"
+                  << deserialized_rdp.rdp.nonce << "|\n"
+                  << deserialized_rdp.rdp.time_stamp << "|\n"
                   << public_key_str  // 公開鍵を追加
                   << "Message-with-public-key-end\n"; 
     return messageStream.str();
@@ -757,15 +757,41 @@ std::string calculateExpirationTime(int durationHours, const std::string& format
     return timeStream.str();
 }
 
-RDP_format Makes_RDP(MessageType type, std::string source_ip, std::string dest_ip, Certificate_Format cert, std::uint32_t n, std::string t, std::vector<unsigned char> signature) {
+RDP_format Makes_RDP(
+    MessageType type,
+    const std::string& source_ip,
+    const std::string& dest_ip,
+    const Certificate_Format& cert,
+    std::uint32_t n,
+    const std::string& t,
+    const std::vector<unsigned char>& signature
+) {
     RDP_format rdp;
+
+    // type の設定
     rdp.type = type;
-    rdp.source_ip = source_ip;
-    rdp.dest_ip = dest_ip;
+
+    // source_ip の設定
+    std::strncpy(rdp.source_ip, source_ip.c_str(), sizeof(rdp.source_ip) - 1);
+    rdp.source_ip[sizeof(rdp.source_ip) - 1] = '\0'; // ヌル終端を保証
+
+    // dest_ip の設定
+    std::strncpy(rdp.dest_ip, dest_ip.c_str(), sizeof(rdp.dest_ip) - 1);
+    rdp.dest_ip[sizeof(rdp.dest_ip) - 1] = '\0'; // ヌル終端を保証
+
+    // その他のフィールドの設定
     rdp.cert = cert;
-    rdp.n = n;
-    rdp.t = t;
-    rdp.signature = signature;
+    rdp.nonce = n;
+
+    // time_stamp の設定
+    std::strncpy(rdp.time_stamp, t.c_str(), sizeof(rdp.time_stamp) - 1);
+    rdp.time_stamp[sizeof(rdp.time_stamp) - 1] = '\0'; // ヌル終端を保証
+
+    // signature の設定
+    for (size_t i = 0; i < signature.size() && i < 256; ++i) {
+        rdp.signature[i].push_back(signature[i]);
+    }
+
     return rdp;
 }
 

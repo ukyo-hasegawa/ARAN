@@ -36,7 +36,7 @@ struct RDP_format {
     char dest_ip[16];
     Certificate_Format cert;
     std::uint32_t nonce;
-    char time_stamp[20];
+    std::string time_stamp[20];
     std::vector<unsigned char> signature[256];
 };
 
@@ -67,10 +67,10 @@ struct Forwarding_REP_format {
 
 Certificate_Format Makes_Certificate(std::string own_ip, std::string own_public_key, std::string t, std::string expires) {
     Certificate_Format Certificate;
-    Certificate.own_ip = own_ip;
+    Certificate.own_ip[0] = own_ip;
     Certificate.own_public_key = own_public_key;
-    Certificate.t = t;
-    Certificate.expires = expires;
+    Certificate.t[0] = t;
+    Certificate.expires[0] = expires;
     return Certificate;
 }
 
@@ -393,7 +393,7 @@ RDP_format deserialize_data(const std::vector<uint8_t>& buf) {
     if (offset >= buf.size()) throw std::runtime_error("Buffer underflow while reading type");
     deserialized_rdp.type = static_cast<MessageType>(buf[offset]);
     offset += 1;
-    deserialized_rdp.dest_ip = deserialize_string();
+    deserialized_rdp.dest_ip[0] = deserialize_string();
 
     // Certificate_Format のデシリアライズ
     deserialized_rdp.cert.own_ip = deserialize_string();
@@ -534,30 +534,21 @@ std::string get_PublicKey_As_String(EVP_PKEY* pkey) {
 }
 
 // 現在時刻の取得
-char Get_time(){
-    auto now = std::chrono::system_clock::now();
-    std::time_t currentTime = std::chrono::system_clock::to_time_t(now);
-    std::tm* localTime = std::localtime(&currentTime);
-    std::ostringstream timeStream;
-    timeStream << std::put_time(localTime, "%Y-%m-%d %H:%M:%S");
-    char formattedTime = timeStream.str();
-    return formattedTime;
-}
-void set_time_stamp(RDP_format& rdp) {
-    // 現在時刻を取得
+// 現在時刻の取得
+std::string get_time() {
     auto now = std::chrono::system_clock::now();
     std::time_t currentTime = std::chrono::system_clock::to_time_t(now);
     std::tm* localTime = std::localtime(&currentTime);
 
     // 時刻をフォーマット
-    char formattedTime[20];
-    std::strftime(formattedTime, sizeof(formattedTime), "%Y-%m-%d %H:%M:%S", localTime);
+    std::ostringstream timeStream;
+    timeStream << std::put_time(localTime, "%Y-%m-%d %H:%M:%S");
 
-    // time_stamp にコピー
-    std::strncpy(rdp.time_stamp, formattedTime, sizeof(rdp.time_stamp) - 1);
-    rdp.time_stamp[sizeof(rdp.time_stamp) - 1] = '\0'; // ヌル終端を保証
+    // フォーマットされた時刻を std::string として返す
+    return timeStream.str();
 }
-std::string calculateExpirationTime(int durationHours, const std::string& formattedTime) {
+
+std::string calculateExpirationTime(int durationHours, const std::string formattedTime) {
     // formattedTimeをstd::tmに変換
     std::tm tm = {};
     std::istringstream ss(formattedTime);
@@ -752,7 +743,7 @@ int main() {
     if (!private_key) return 1;
 
     // 現在時刻の取得
-    char Formatted_Time = set_time_stamp();
+    std::string Formatted_Time = get_time();
     
     // 有効期限の取得
     std::string expirationTime = calculateExpirationTime(24, Formatted_Time);
