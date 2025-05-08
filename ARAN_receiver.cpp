@@ -256,77 +256,90 @@ void serialize(const RDP_format& rdp, unsigned char* buf) {
 void deserialize(const std::vector<uint8_t>& buf, RDP_format& rdp) {
     size_t offset = 0;
 
-    // Deserialize type
+    //type
     rdp.type = static_cast<MessageType>(buf[offset]);
     offset += sizeof(uint8_t);
+    //printf("rdp.type: %d\n",rdp.type);
 
-    // Deserialize source_ip
+    //source_ip
     std::memcpy(rdp.source_ip, buf.data() + offset, sizeof(rdp.source_ip));
     offset += sizeof(rdp.source_ip);
+    //printf("rdp.source_ip: %s\n",rdp.source_ip);
 
-    // Deserialize dest_ip
+    //dest_ip
     std::memcpy(rdp.dest_ip, buf.data() + offset, sizeof(rdp.dest_ip));
     offset += sizeof(rdp.dest_ip);
+    //printf("rdp.dest_ip: %s\n",rdp.dest_ip);
 
-    // Deserialize cert (own_ip, t, expires)
+    //cert_own_ip
     std::memcpy(rdp.cert.own_ip, buf.data() + offset, sizeof(rdp.cert.own_ip));
     offset += sizeof(rdp.cert.own_ip);
-    // Deserialize own_public_key
+    //printf("rdp.cert.own_ip: %s\n",rdp.cert.own_ip);
+    
+    //cert_own_public_key
     std::memcpy(rdp.cert.own_public_key, buf.data() + offset, sizeof(rdp.cert.own_public_key));
     offset += sizeof(rdp.cert.own_public_key);
-    // Deserialize t
+    //printf("rdp.cert.own_public_key: %s\n",rdp.cert.own_public_key);
+    
+    //cert_timestamp
     std::memcpy(rdp.cert.time_stamp, buf.data() + offset, sizeof(rdp.cert.time_stamp));
     offset += sizeof(rdp.cert.time_stamp);
-    // Deserialize expires
+    //printf("rdp.cert.time_stamp: %s\n",rdp.cert.time_stamp);
+    
+    //cert_expires
     std::memcpy(rdp.cert.expires, buf.data() + offset, sizeof(rdp.cert.expires));
     offset += sizeof(rdp.cert.expires);
+    //printf("rdp.cert.expires: %s\n",rdp.cert.expires);
     
-    // Deserialize nonce
+    //nonce
     std::memcpy(&rdp.nonce, buf.data() + offset, sizeof(rdp.nonce));
     offset += sizeof(rdp.nonce);
+    //printf("rdp.nonce: %u\n",rdp.nonce);
 
-    // Deserialize time_stamp
+    //time_stamp
     std::memcpy(rdp.time_stamp, buf.data() + offset, sizeof(rdp.time_stamp));
     offset += sizeof(rdp.time_stamp);
+    printf("rdp.time_stamp: %s\n",rdp.time_stamp);
 
-    // Deserialize signature
+    //signature
     std::memcpy(rdp.signature.data(), buf.data() + offset, rdp.signature.size());
+    //printf("rdp.signature: %s\n",rdp.signature.data());
 }
 
 // デシリアライズ処理(REP)
 void deserialize(const std::vector<uint8_t>& buf, Forwarding_RDP_format& rep) {
     size_t offset = 0;
 
-    // Deserialize type
+    //type
     rep.rdp.type = static_cast<MessageType>(buf[offset]);
     offset += sizeof(uint8_t);
 
-    // Deserialize dest_ip
+    //dest_ip
     std::memcpy(rep.rdp.dest_ip, buf.data() + offset, sizeof(rep.rdp.dest_ip));
     offset += sizeof(rep.rdp.dest_ip);
 
-    // Deserialize cert (own_ip, t, expires)
+    //cert_own_ip
     std::memcpy(rep.rdp.cert.own_ip, buf.data() + offset, sizeof(rep.rdp.cert.own_ip));
     offset += sizeof(rep.rdp.cert.own_ip);
-    // Deserialize own_public_key
+    //cert_own_public_key
     std::memcpy(rep.rdp.cert.own_public_key, buf.data() + offset, sizeof(rep.rdp.cert.own_public_key));
     offset += sizeof(rep.rdp.cert.own_public_key);
-    // Deserialize t
+    //cert_timestamp
     std::memcpy(rep.rdp.cert.time_stamp, buf.data() + offset, sizeof(rep.rdp.cert.time_stamp));
     offset += sizeof(rep.rdp.cert.time_stamp);
-    // Deserialize expires
+    //cert_expires
     std::memcpy(rep.rdp.cert.expires, buf.data() + offset, sizeof(rep.rdp.cert.expires));
     offset += sizeof(rep.rdp.cert.expires);
     
-    // Deserialize nonce
+    //cert_nonce
     std::memcpy(&rep.rdp.nonce, buf.data() + offset, sizeof(rep.rdp.nonce));
     offset += sizeof(rep.rdp.nonce);
 
-    // Deserialize time_stamp
+    //time_stamp
     std::memcpy(rep.rdp.time_stamp, buf.data() + offset, sizeof(rep.rdp.time_stamp));
     offset += sizeof(rep.rdp.time_stamp);
 
-    // Deserialize signature
+    //signature
     std::memcpy(rep.rdp.signature.data(), buf.data() + offset, rep.rdp.signature.size());
 }
 
@@ -334,36 +347,36 @@ void deserialize(const std::vector<uint8_t>& buf, Forwarding_RDP_format& rep) {
 void deserialize(const std::vector<uint8_t>& buf, Forwarding_REP_format& rep) {
     size_t offset = 0;
 
-    // Deserialize type
+    //type
     rep.type = static_cast<MessageType>(buf[offset]);
     offset += sizeof(uint8_t);
 
-    // Deserialize dest_ip
+    //dest_ip
     std::memcpy(rep.dest_ip, buf.data() + offset, sizeof(rep.dest_ip));
     offset += sizeof(rep.dest_ip);
 
-    // Deserialize cert (own_ip, t, expires)
+    //cert_own_ip
     std::memcpy(rep.cert.own_ip, buf.data() + offset, sizeof(rep.cert.own_ip));
     offset += sizeof(rep.cert.own_ip);
-    // Deserialize own_public_key
+    //cert_own_public_key
     std::memcpy(rep.cert.own_public_key, buf.data() + offset, sizeof(rep.cert.own_public_key));
     offset += sizeof(rep.cert.own_public_key);
-    // Deserialize t
+    //cert_timestamp
     std::memcpy(rep.cert.time_stamp, buf.data() + offset, sizeof(rep.cert.time_stamp));
     offset += sizeof(rep.cert.time_stamp);
-    // Deserialize expires
+    //cert_expires
     std::memcpy(rep.cert.expires, buf.data() + offset, sizeof(rep.cert.expires));
     offset += sizeof(rep.cert.expires);
     
-    // Deserialize nonce
+    //nonce
     std::memcpy(&rep.nonce, buf.data() + offset, sizeof(rep.nonce));
     offset += sizeof(rep.nonce);
 
-    // Deserialize time_stamp
+    //time_stamp
     std::memcpy(rep.time_stamp, buf.data() + offset, sizeof(rep.time_stamp));
     offset += sizeof(rep.time_stamp);
 
-    // Deserialize signature
+    //signature
     std::memcpy(rep.signature.data(), buf.data() + offset, rep.signature.size());
 }
 
@@ -820,13 +833,13 @@ bool verifySignature(EVP_PKEY* public_key, const std::string& message, const uns
     return false;
 }
 
-std::tuple<std::string, std::string, std::uint32_t> get_time_nonce_address(const char* time_stamp, std::string sender_ip, std::uint32_t nonce) {
-    std::string formattedTime = time_stamp;
-    std::uint32_t nonce = nonce;
-    std::string ip_address = sender_ip;
+// std::tuple<std::string, std::string, std::uint32_t> get_time_nonce_address(const char* time_stamp, std::string sender_ip, std::uint32_t nonce) {
+//     std::string formattedTime = time_stamp;
+//     std::uint32_t nonce = nonce;
+//     std::string ip_address = sender_ip;
 
-    return {formattedTime, ip_address, nonce};
-}
+//     return {formattedTime, ip_address, nonce};
+// }
 
 
 std::tuple<std::vector<uint8_t>, std::string> receving_process(int sock) {
@@ -1120,7 +1133,7 @@ int main() {
                 //     continue;
                 // }
 
-                
+
 
 
                 // 受信したメッセージの中に転送端末の署名および証明書がないかを確認
