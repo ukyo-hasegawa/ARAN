@@ -37,7 +37,7 @@ class TopologyGenerator:
     self.stas = []
 
     print("*** Creating nodes")
-    interval=70;
+    interval=70
     #sta1 = net.addStation('sta1', ip6='fe80::1',cls=CPULimitedStation,position='10,10,0', **kwargs)
     #sta1.setCPUFrac(f=0.01)
     for i in range(num):
@@ -60,7 +60,7 @@ class TopologyGenerator:
         #net.addLink(self.stas[i], cls=adhoc, intf='sta'+str(i+1)+'-wlan0',ssid='adhocNet',mode='g', channel=5)
     net.plotGraph(max_x=800, max_y=800)
 
-    return net;
+    return net
 
   def run(self,net):
     
@@ -70,29 +70,29 @@ class TopologyGenerator:
     #self.sendCommand();
     #self.writeCommand();
     info("*** Running CLI\n")
-    time.sleep(0.5);
+    time.sleep(0.5)
     cliwifi=CLI(net)
     info("*** Stopping network\n")
     net.stop()
     
   def setPromisc(self):
     info("*** Interface configuration ***")
-    num=self.x*self.y;
+    num=self.x*self.y
     for i in range(num):
       self.stas[i].cmd('ifconfig sta'+str(i+1)+'-wlan0 promisc');
       self.stas[i].cmd('iwconfig sta'+str(i+1)+'-wlan0 rts off');
       self.stas[i].cmd('iwconfig sta'+str(i+1)+'-wlan0 retry max 1');
 
   def command_source(self,cmd):
-    self.stas[0].cmd('xterm -hold -e '+cmd);
+    self.stas[0].cmd('xterm -hold -e '+cmd)
 
 if __name__ == '__main__':
   setLogLevel('info')
-  args=sys.argv;
+  args=sys.argv
 
-  topo=TopologyGenerator();
-  topo.params(args);
-  net=topo.generate();
+  topo=TopologyGenerator()
+  topo.params(args)
+  net=topo.generate()
   #topo.setPromisc();
-  topo.run(net);
+  topo.run(net)
   #topo.command('java -cp ./bin ou.ist.de.Main -protocol:DSR -port:10000 -frag:1000 &');

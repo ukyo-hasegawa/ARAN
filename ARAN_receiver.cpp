@@ -1227,7 +1227,7 @@ int main() {
     std::vector<uint8_t> send_buf(2048);
 
     // タイムスタンプ,ノンスと受信ノードのIPアドレスを管理するリスト
-    std::list<std::tuple<std::string, std::string, std::uint32_t>> received_messages;
+    std::list<std::tuple<std::string, std::string, std::uint32_t>> received_messages; //改善する必要あり
 
     sock = socket(AF_INET, SOCK_DGRAM, 0);
     if (sock < 0) {
@@ -1255,11 +1255,11 @@ int main() {
         memset(buf, 0, sizeof(buf));
 
         std::vector<uint8_t> recv_buf;
-        std::string sender_ip;
+        std::string sender_ip_raw; //インターフェースから受信する生データ。おいおいchar[16]に格納する。
 
         // 受信処理
-        std::tie(recv_buf, sender_ip) = receving_process(sock);
-        std::cout << "sender_ip: " << sender_ip << std::endl;
+        std::tie(recv_buf, sender_ip_raw) = receving_process(sock);
+        std::cout << "sender_ip: " << sender_ip_raw << std::endl;
         
         // 受信処理
         
@@ -1291,7 +1291,7 @@ int main() {
                 
 
                 //Forwarding RDP formatからtime stamp:tとnonce:nをタプルで取得
-                std::tuple<std::string, std::string, std::uint32_t> time_and_nonce_and_ipaddress = get_time_nonce_address(deserialized_rdp.rdp.time_stamp, sender_ip, deserialized_rdp.rdp.nonce);
+                std::tuple<std::string, std::string, std::uint32_t> time_and_nonce_and_ipaddress = get_time_nonce_address(deserialized_rdp.rdp.time_stamp, sender_ip_raw, deserialized_rdp.rdp.nonce);
                 std::cout << "Receving time_stamp:" << std::get<0>(time_and_nonce_and_ipaddress) << std::endl;
                 std::cout << "Receving IP_address:"<< std::get<1>(time_and_nonce_and_ipaddress) << std::endl;
                 std::cout << "Receving nonce:"<< std::get<2>(time_and_nonce_and_ipaddress) << std::endl;
@@ -1374,19 +1374,19 @@ int main() {
                     struct sockaddr_in rep_addr;
                     rep_addr.sin_family = AF_INET;
                     rep_addr.sin_port = htons(12345);
-                    std::cout << "Send REP to : " << sender_ip<< std::endl;
+                    std::cout << "Send REP to : " << sender_ip_raw<< std::endl;
                     std::cout << "Send REP size:" << rep_buf.size() << std::endl; 
-                    rep_addr.sin_addr.s_addr = inet_addr(sender_ip.c_str());
+                    rep_addr.sin_addr.s_addr = inet_addr(sender_ip_raw.c_str());
 
                     int rep_sock = socket(AF_INET, SOCK_DGRAM, 0);
                     if (rep_sock < 0) {
                         std::cerr << "Failed to create socket for REP" << std::endl;
                     }
-                    std::cout << "Next ip:" << sender_ip << std::endl;
+                    std::cout << "Next ip:" << sender_ip_raw << std::endl;
                     if (sendto(rep_sock, rep_buf.data(), rep_buf.size(), 0, reinterpret_cast<struct sockaddr*>(&rep_addr), sizeof(rep_addr)) < 0) {
                         perror("sendto failed for REP");
                     } else {
-                        std::cout << "---------------------------REP sent successfully to " << sender_ip <<"------------------------------" << std::endl;
+                        std::cout << "---------------------------REP sent successfully to " << sender_ip_raw <<"------------------------------" << std::endl;
 
                     }
 
