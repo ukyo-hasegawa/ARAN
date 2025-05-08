@@ -130,7 +130,7 @@ void serialize(const RDP_format& rdp, unsigned char* buf) {
     
 }
 
-// デシリアライズ処理(RDP)
+// デシリアライズ処理
 void deserialize(const std::vector<uint8_t>& buf, RDP_format& rdp) {
     size_t offset = 0;
 
@@ -170,47 +170,67 @@ void deserialize(const std::vector<uint8_t>& buf, RDP_format& rdp) {
     // Deserialize signature
     std::memcpy(rdp.signature.data(), buf.data() + offset, rdp.signature.size());
 }
-
-// デシリアライズ処理(REP)
-void deserialize(const std::vector<uint8_t>& buf, Forwarding_REP_format& rep) {
+/*
+void RDP_deserialize(const unsigned char* buf, RDP_format& rdp) {
     size_t offset = 0;
 
     // Deserialize type
-    rep.type = static_cast<MessageType>(buf[offset]);
+    rdp.type = static_cast<MessageType>(buf[offset]);
     offset += sizeof(uint8_t);
 
     // Deserialize source_ip
-    std::memcpy(rep.source_ip, buf.data() + offset, sizeof(rep.source_ip));
-    offset += sizeof(rep.source_ip);
+    std::memcpy(rdp.source_ip, buf + offset, sizeof(rdp.source_ip));
+    offset += sizeof(rdp.source_ip);
 
     // Deserialize dest_ip
-    std::memcpy(rep.dest_ip, buf.data() + offset, sizeof(rep.dest_ip));
-    offset += sizeof(rep.dest_ip);
+    std::memcpy(rdp.dest_ip, buf + offset, sizeof(rdp.dest_ip));
+    offset += sizeof(rdp.dest_ip);
 
     // Deserialize cert (own_ip, t, expires)
-    std::memcpy(rep.cert.own_ip, buf.data() + offset, sizeof(rep.cert.own_ip));
-    offset += sizeof(rep.cert.own_ip);
-    // Deserialize own_public_key
-    std::memcpy(rep.cert.own_public_key, buf.data() + offset, sizeof(rep.cert.own_public_key));
-    offset += sizeof(rep.cert.own_public_key);
-    // Deserialize t
-    std::memcpy(rep.cert.t, buf.data() + offset, sizeof(rep.cert.t));
-    offset += sizeof(rep.cert.t);
-    // Deserialize expires
-    std::memcpy(rep.cert.expires, buf.data() + offset, sizeof(rep.cert.expires));
-    offset += sizeof(rep.cert.expires);
-    
+    for (auto& ip : rdp.cert.own_ip) {
+        size_t len = 0;
+        std::memcpy(&len, buf + offset, sizeof(len)); // 文字列の長さを取得
+        offset += sizeof(len);
+        char temp[256] = {};
+        std::memcpy(temp, buf + offset, len);        // 文字列の内容を取得
+        offset += len;
+        ip = temp;
+    }
+    for (auto& t : rdp.cert.t) {
+        size_t len = 0;
+        std::memcpy(&len, buf + offset, sizeof(len));
+        offset += sizeof(len);
+        char temp[256] = {};
+        std::memcpy(temp, buf + offset, len);
+        offset += len;
+        t = temp;
+    }
+    for (auto& expires : rdp.cert.expires) {
+        size_t len = 0;
+        std::memcpy(&len, buf + offset, sizeof(len));
+        offset += sizeof(len);
+        char temp[256] = {};
+        std::memcpy(temp, buf + offset, len);
+        offset += len;
+        expires = temp;
+    }
+
     // Deserialize nonce
-    std::memcpy(&rep.nonce, buf.data() + offset, sizeof(rep.nonce));
-    offset += sizeof(rep.nonce);
+    std::memcpy(&rdp.nonce, buf + offset, sizeof(rdp.nonce));
+    offset += sizeof(rdp.nonce);
 
     // Deserialize time_stamp
-    std::memcpy(rep.time_stamp, buf.data() + offset, sizeof(rep.time_stamp));
-    offset += sizeof(rep.time_stamp);
+    std::memcpy(rdp.time_stamp, buf + offset, sizeof(rdp.time_stamp));
+    offset += sizeof(rdp.time_stamp);
 
     // Deserialize signature
-    std::memcpy(rep.signature.data(), buf.data() + offset, rep.signature.size());
+    for (size_t i = 0; i < 256; ++i) {
+        rdp.signature[i].resize(1); // Assuming 1 byte per signature element
+        std::memcpy(rdp.signature[i].data(), buf + offset, rdp.signature[i].size());
+        offset += rdp.signature[i].size();
+    }
 }
+*/
 
 MessageType get_packet_type(const std::vector<uint8_t>& buf) {
     if (buf.size() < 1) {
@@ -905,11 +925,10 @@ int main() {
             // パケットタイプを取得
             MessageType packet_type = get_packet_type(recv_buf);
             std::cout << "Received packet_type:" << static_cast<int>(packet_type) << std::endl;
-            
+            /*
             if (packet_type == MessageType::REP) {
                 // REP メッセージのデシリアライズ
-                Forwarding_REP_format deserialized_rep = {};
-                deserialize(recv_buf,deserialized_rep); 
+                //Forwarding_REP_format deserialized_rep = deserialize_forwarding_rep(recv_buf);
 
                 // REP メッセージの内容をログに出力
                 std::cout << "Received REP:" << std::endl;
@@ -932,7 +951,7 @@ int main() {
             } else {
                 std::cout << "Received non-REP message. Ignoring..." << std::endl;
             }
-            
+            */
         } catch (const std::exception& e) {
             std::cerr << "Error during response processing: " << e.what() << std::endl;
         }
