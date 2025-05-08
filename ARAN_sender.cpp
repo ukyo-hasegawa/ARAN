@@ -459,7 +459,7 @@ std::string construct_message_with_key(const RDP_format& deserialized_rdp, const
     
     return messageStream.str();
 }
-
+//署名長と署名をセットで返す関数
 Signature_Format size256_signMessage(EVP_PKEY* private_key, const std::string& message) {
     Signature_Format signature_format;
     signature_format.signature = {0}; // 256バイトの署名を初期化
