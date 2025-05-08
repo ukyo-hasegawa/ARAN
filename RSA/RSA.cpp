@@ -123,7 +123,6 @@ std::string decryptMessage(EVP_PKEY* pkey, const std::vector<unsigned char>& enc
 }
 
 // メッセージに署名を付与
-/*
 std::vector<unsigned char> signMessage(EVP_PKEY* privateKey, const std::string& message) {
     EVP_MD_CTX* ctx = EVP_MD_CTX_new();
     if (!ctx) {
@@ -161,7 +160,7 @@ std::vector<unsigned char> signMessage(EVP_PKEY* privateKey, const std::string& 
     signature.resize(sigLen);
     return signature;
 }
-*/
+
 /*
 // 署名の検証
 bool verifySignature(EVP_PKEY* publicKey, const std::string& message, const std::vector<unsigned char>& signature) {
