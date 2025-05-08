@@ -64,17 +64,17 @@ struct InfoSet {
     char ip[16];
     uint32_t nonce;
     char timestamp[20];
-
-    // セットやマップで使うために比較演算子を定義
-    bool operator<(const InfoSet& other) const {
-        int ip_cmp = std::strncmp(ip, other.ip, sizeof(ip));
-        if (ip_cmp != 0) return ip_cmp < 0;
-
-        if (nonce != other.nonce) return nonce < other.nonce;
-
-        return std::strncmp(timestamp, other.timestamp, sizeof(timestamp)) < 0;
-    }
 };
+
+// 重複確認用関数
+bool isDuplicate(const std::list<InfoSet>& infoList, const InfoSet& newInfo) {
+    for (const InfoSet& info : infoList) {
+        if (std::strcmp(info.ip, newInfo.ip) == 0 && info.nonce == newInfo.nonce && std::strcmp(info.timestamp, newInfo.timestamp) == 0) {
+            return true; // 重複している
+        }
+    }
+    return false; // 重複していない
+}
 
 MessageType get_packet_type(const std::vector<uint8_t>& buf) {
     if (buf.size() < 1) {
@@ -703,6 +703,12 @@ Certificate_Format Makes_Certificate(const char* own_ip,const char* own_public_k
 
     return Certificate;
 }
+
+//
+InfoSet Makes_InfoSet()
+{
+    
+}
 // 署名を生成する関数(固定長署名)
 std::vector<unsigned char> sign_message(EVP_PKEY* private_key, const std::string& message) {
     std::vector<unsigned char> signature;
@@ -856,8 +862,10 @@ int main() {
     std::string next_ip = "";
     std::vector<uint8_t> send_buf(2048);
 
+
     // タイムスタンプ,ノンスと受信ノードのIPアドレスを管理するリスト
-    std::list<std::tuple<std::string, std::string, std::uint32_t>> received_messages; //改善する必要あり
+    InfoSet new_info_set = {};
+    //std::list<std::tuple<std::string, std::string, std::uint32_t>> received_messages; //改善する必要あり
 
     sock = socket(AF_INET, SOCK_DGRAM, 0);
     if (sock < 0) {
@@ -924,22 +932,13 @@ int main() {
                 std::cout << "Receving time_stamp:" << deserialized_rdp.rdp.time_stamp << std::endl;
                 std::cout << "Receving IP_address:"<< deserialized_rdp.rdp.source_ip << std::endl;
                 std::cout << "Receving nonce:"<< deserialized_rdp.rdp.nonce << std::endl;
+
+                //新たに受信したデータをnew_info_setに追加
+
+                //新たな受信メッセージを受信した場合、リストに追加
             
                 // 受信したメッセージのtime stamp:tとnonce:nが既に受信したものかどうかを確認する
-                // auto it = std::find_if(received_messages.begin(), received_messages.end(),
-                // [&time_and_nonce_and_ipaddress](const std::tuple<std::string, std::string, std::uint32_t>& element) {
-                //     return  std::get<0>(element) == std::get<0>(time_and_nonce_and_ipaddress) &&
-                //             std::get<1>(element) == std::get<1>(time_and_nonce_and_ipaddress) &&
-                //             std::get<2>(element) == std::get<2>(time_and_nonce_and_ipaddress);
-                // });
-                // if (it != received_messages.end()) {
-                //     std::cout << "------------------------Received message is already received.------------------------" << std::endl;
-                //     continue; // 既に受信したメッセージを破棄
-                // } else {
-                //     std::cout << "------------------Received message is not received yet.-------------------" << std::endl;
-                //     // 受信したtime stampとnonceと送信元IPを保存
-                //     received_messages.push_back(time_and_nonce_and_ipaddress);
-                // }
+                if(isDuplicate())
 
                 // 署名の検証
                 std::string message = construct_message(deserialized_rdp);
