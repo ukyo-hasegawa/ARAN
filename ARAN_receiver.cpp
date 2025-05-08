@@ -63,13 +63,13 @@ struct Forwarding_REP_format {
 struct InfoSet {
     char ip[16];
     uint32_t nonce;
-    char timestamp[20];
+    char time_stamp[20];
 };
 
 // 重複確認用関数
 bool isDuplicate(const std::list<InfoSet>& infoList, const InfoSet& newInfo) {
     for (const InfoSet& info : infoList) {
-        if (std::strcmp(info.ip, newInfo.ip) == 0 && info.nonce == newInfo.nonce && std::strcmp(info.timestamp, newInfo.timestamp) == 0) {
+        if (std::strcmp(info.ip, newInfo.ip) == 0 && info.nonce == newInfo.nonce && std::strcmp(info.time_stamp, newInfo.time_stamp) == 0) {
             return true; // 重複している
         }
     }
@@ -704,10 +704,18 @@ Certificate_Format Makes_Certificate(const char* own_ip,const char* own_public_k
     return Certificate;
 }
 
-//
-InfoSet Makes_InfoSet()
-{
-    
+//Infosetを作成する関数
+InfoSet Makes_InfoSet(const char* ip, const uint32_t nonce, const char* time_stamp) {
+    InfoSet infoSet;
+    std::strncpy(infoSet.ip, ip, sizeof(infoSet.ip) - 1);
+    infoSet.ip[sizeof(infoSet.ip) - 1] = '\0'; // Null-terminate
+
+    infoSet.nonce = nonce;
+
+    std::strncpy(infoSet.time_stamp, time_stamp, sizeof(infoSet.time_stamp) - 1);
+    infoSet.time_stamp[sizeof(infoSet.time_stamp) - 1] = '\0'; // Null-terminate
+
+    return infoSet;
 }
 // 署名を生成する関数(固定長署名)
 std::vector<unsigned char> sign_message(EVP_PKEY* private_key, const std::string& message) {
@@ -865,6 +873,8 @@ int main() {
 
     // タイムスタンプ,ノンスと受信ノードのIPアドレスを管理するリスト
     InfoSet new_info_set = {};
+    //既に受信したメッセージのリスト
+    std::list<InfoSet> received_info_set = {};
     //std::list<std::tuple<std::string, std::string, std::uint32_t>> received_messages; //改善する必要あり
 
     sock = socket(AF_INET, SOCK_DGRAM, 0);
@@ -934,12 +944,18 @@ int main() {
                 std::cout << "Receving nonce:"<< deserialized_rdp.rdp.nonce << std::endl;
 
                 //新たに受信したデータをnew_info_setに追加
+                new_info_set = Makes_InfoSet(deserialized_rdp.rdp.source_ip, deserialized_rdp.rdp.nonce, deserialized_rdp.rdp.time_stamp);
 
                 //新たな受信メッセージを受信した場合、リストに追加
             
                 // 受信したメッセージのtime stamp:tとnonce:nが既に受信したものかどうかを確認する
-                if(isDuplicate())
-
+                if(isDuplicate(received_info_set, new_info_set)) {
+                    std::cout << "Duplicate message detected. Ignoring..." << std::endl;
+                    continue; // 重複している場合は無視
+                } else {
+                    received_info_set.push_back(new_info_set); // 新しいメッセージをリストに追加
+                }
+                std::cout << "New message received. Processing..." << std::endl;
                 // 署名の検証
                 std::string message = construct_message(deserialized_rdp);
                 if (!verifySignature(public_key, message, deserialized_rdp.rdp.signature.data(), deserialized_rdp.rdp.signature.size())) {
@@ -1090,19 +1106,23 @@ int main() {
                 std::cout << "deserialize_rep.cert.expires:" << deserialized_rep.cert.expires << std::endl;
                 std::cout << "-------------------------------------Forwarding REP-------------------------------------" << std::endl;
                 //time stampとnonceから対応するIPアドレスを取得
-                auto it = std::find_if(received_messages.begin(), received_messages.end(),
-                    [&deserialized_rep](const std::tuple<std::string, std::string, std::uint32_t>& element) {
-                        return std::get<0>(element) == deserialized_rep.time_stamp &&
-                                std::get<2>(element) == deserialized_rep.nonce;
-                    });
+                // auto it = std::find_if(received_messages.begin(), received_messages.end(),
+                //     [&deserialized_rep](const std::tuple<std::string, std::string, std::uint32_t>& element) {
+                //         return std::get<0>(element) == deserialized_rep.time_stamp &&
+                //                 std::get<2>(element) == deserialized_rep.nonce;
+                //     });
 
-                if (it != received_messages.end()) {
-                    next_ip = std::get<1>(*it);
-                    std::cout << "Next IP address found: " << next_ip << std::endl;
-                } else {
-                    std::cerr << "Next IP address not found for the given timestamp and nonce" << std::endl;
-                    continue;
-                }
+                // if (it != received_messages.end()) {
+                //     next_ip = std::get<1>(*it);
+                //     std::cout << "Next IP address found: " << next_ip << std::endl;
+                // } else {
+                //     std::cerr << "Next IP address not found for the given timestamp and nonce" << std::endl;
+                //     continue;
+                // }
+
+                
+
+
                 // 受信したメッセージの中に転送端末の署名および証明書がないかを確認
                 if (!deserialized_rep.receiver_signature.empty() && strlen(deserialized_rep.receiver_cert.own_ip) == 0) {
                     std::cout << "Forwarder signature and certificate found. Removing them..." << std::endl;
