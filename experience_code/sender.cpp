@@ -17,7 +17,7 @@
 #include <netdb.h>
 #include <ifaddrs.h>
 #include <cstring>
-#include "RSA/RSA.h"
+#include "../RSA/RSA.h"
 
 enum class MessageType : uint8_t {
     RDP = 0x01,
