@@ -480,55 +480,6 @@ void serialize_forwarding_rep(const Forwarding_REP_format& rep, std::vector<uint
     serialize_string(rep.receiver_cert.expires);
 }
 
-std::vector<unsigned char> deserialize_vector(const std::vector<uint8_t>& buf, std::size_t& offset) {
-    std::cout << "buf.size(): " << buf.size() << std::endl;
-    std::cout << "offset: " << offset << std::endl;
-    
-    // 1. offset + 4 のチェック (オーバーフロー防止)
-    if (offset + 4 > buf.size()) {  // 修正
-        std::cout << "Buffer underflow while reading vector length" << std::endl;
-        throw std::runtime_error("Buffer underflow while reading vector length");
-    }
-
-    // 2. リトルエンディアンで長さを取得
-    std::uint32_t len = 0;
-    len |= static_cast<std::uint32_t>(buf[offset + 0]) << 0;
-    len |= static_cast<std::uint32_t>(buf[offset + 1]) << 8;
-    len |= static_cast<std::uint32_t>(buf[offset + 2]) << 16;
-    len |= static_cast<std::uint32_t>(buf[offset + 3]) << 24;
-    offset += 4;
-
-    std::cout << "Vector length: " << len << std::endl;
-
-    // 3. offset + len のチェック (オーバーフロー防止)
-    if (offset + len > buf.size()) {  // 修正
-        std::cout << "Buffer underflow while reading vector data" << std::endl;
-        throw std::runtime_error("Buffer underflow while reading vector data");
-    }
-
-    // 4. vector にデータを格納
-    std::vector<unsigned char> result(buf.begin() + offset, buf.begin() + offset + len);
-    offset += len;
-    
-    return result;
-}
-
-std::int32_t deserialize_int32(const std::vector<uint8_t>& buf, std::size_t& offset) {
-    if (offset + 4 > buf.size()) {
-        std::cerr << "Buffer underflow while reading int32" << std::endl;
-        throw std::runtime_error("Buffer underflow while reading int32");
-    }
-
-    std::int32_t value = 0;
-    value |= static_cast<std::int32_t>(buf[offset + 0]) << 0;
-    value |= static_cast<std::int32_t>(buf[offset + 1]) << 8;
-    value |= static_cast<std::int32_t>(buf[offset + 2]) << 16;
-    value |= static_cast<std::int32_t>(buf[offset + 3]) << 24;  // ここが重要！
-    
-    offset += 4;
-    return value;
-}
-
 std::string certificate_to_string(const Certificate_Format& cert) {
     std::ostringstream certStream;
     certStream << cert.own_ip << "|\n"
