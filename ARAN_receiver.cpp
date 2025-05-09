@@ -918,6 +918,7 @@ int main() {
                     std::cout << "Duplicate message detected. Ignoring..." << std::endl;
                     continue; // 重複している場合は無視
                 } else {
+                    std::cout << "New message detected. Adding to list..." << std::endl;
                     received_info_set.push_back(new_info_set); // 新しいメッセージをリストに追加
                 }
                 std::cout << "New message received. Processing..." << std::endl;
