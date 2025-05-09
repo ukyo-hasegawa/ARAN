@@ -125,7 +125,7 @@ void serialize(const RDP_format& rdp, unsigned char* buf) {
     std::memcpy(buf + offset, rdp.dest_ip, sizeof(rdp.dest_ip));
     offset += sizeof(rdp.dest_ip);
 
-    //ceer own_ip
+    //cert own_ip
     std::memcpy(buf + offset, rdp.cert.own_ip, sizeof(rdp.cert.own_ip));
     offset += sizeof(rdp.cert.own_ip);
     //cert own_public_key
