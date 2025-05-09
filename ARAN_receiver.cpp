@@ -14,7 +14,7 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <unistd.h>
-#include "RSA/RSA.h"
+//#include "RSA/RSA.h"
 #include <tuple>
 #include <list>
 #include <algorithm>
@@ -22,7 +22,7 @@
 enum class MessageType : uint8_t {
     RDP = 0x01,
     REP = 0x02,
-    ForwardRDP = 0x03
+    FORWARDING_RDP = 0x03
 };
 
 struct Certificate_Format {
@@ -44,7 +44,7 @@ struct RDP_format {
 
 struct Forwarding_RDP_format {
     RDP_format rdp;
-    std::vector<unsigned char> receiver_signature;
+    std::array<unsigned char,256> receiver_signature;
     Certificate_Format receiver_cert;
 };
 
@@ -164,17 +164,13 @@ int unicast_send_process(std::vector<uint8_t> buf, std::string next_ip) {
         return 1;
     }
 }
-// シリアライズ処理(RDP)
+// シリアライズ処理(Forwarding_RDP_format)
 void serialize(const Forwarding_RDP_format& rdp, unsigned char* buf) {
     size_t offset = 0;
 
     //type
     buf[offset] = static_cast<uint8_t>(rdp.rdp.type);
     offset += sizeof(uint8_t);
-
-    // //source_ip
-    // std::memcpy(buf + offset, rdp.rdp.source_ip, sizeof(rdp.rdp.source_ip));
-    // offset += sizeof(rdp.rdp.source_ip);
 
     //dest_ip
     std::memcpy(buf + offset, rdp.rdp.dest_ip, sizeof(rdp.rdp.dest_ip));
@@ -422,59 +418,6 @@ EVP_PKEY* load_private_key(const std::string& filename) {
     fclose(file);
     return private_key;
 }
-//REP専用のシリアライズ関数
-void serialize_forwarding_rep(const Forwarding_REP_format& rep, std::vector<uint8_t>& buf) {
-    auto serialize_string = [&buf](const std::string& str) {
-        std::uint32_t len = str.size();
-        buf.push_back((len >> 0) & 0xFF);
-        buf.push_back((len >> 8) & 0xFF);
-        buf.push_back((len >> 16) & 0xFF);
-        buf.push_back((len >> 24) & 0xFF);
-        buf.insert(buf.end(), str.begin(), str.end());
-    };
-
-    // type のシリアライズ
-    buf.push_back(static_cast<uint8_t>(rep.type));
-
-    // dest_ip のシリアライズ
-    serialize_string(rep.dest_ip);
-
-    // Certificate_Format のシリアライズ
-    serialize_string(rep.cert.own_ip);
-    serialize_string(rep.cert.own_public_key);
-    serialize_string(rep.cert.time_stamp);
-    serialize_string(rep.cert.expires);
-
-    // n のシリアライズ
-    for (int i = 0; i < 4; i++) {
-        buf.push_back((rep.nonce >> (8 * i)) & 0xFF);
-    }
-
-    // t のシリアライズ
-    serialize_string(rep.time_stamp);
-
-    // signature のシリアライズ
-    std::uint32_t sig_len = rep.signature.size();
-    buf.push_back((sig_len >> 0) & 0xFF);
-    buf.push_back((sig_len >> 8) & 0xFF);
-    buf.push_back((sig_len >> 16) & 0xFF);
-    buf.push_back((sig_len >> 24) & 0xFF);
-    buf.insert(buf.end(), rep.signature.begin(), rep.signature.end());
-
-    // receiver_signature のシリアライズ
-    std::uint32_t receiver_sig_len = rep.receiver_signature.size();
-    buf.push_back((receiver_sig_len >> 0) & 0xFF);
-    buf.push_back((receiver_sig_len >> 8) & 0xFF);
-    buf.push_back((receiver_sig_len >> 16) & 0xFF);
-    buf.push_back((receiver_sig_len >> 24) & 0xFF);
-    buf.insert(buf.end(), rep.receiver_signature.begin(), rep.receiver_signature.end());
-
-    // receiver_cert のシリアライズ
-    serialize_string(rep.receiver_cert.own_ip);
-    serialize_string(rep.receiver_cert.own_public_key);
-    serialize_string(rep.receiver_cert.time_stamp);
-    serialize_string(rep.receiver_cert.expires);
-}
 
 std::string certificate_to_string(const Certificate_Format& cert) {
     std::ostringstream certStream;
@@ -523,7 +466,18 @@ std::tuple<std::string, std::vector<unsigned char>, std::string> split_sign_mess
     return {message, signature, receiver_splited_certificate};
 }
 
-// メッセージを構築する関数
+// メッセージを構築する関数(RDP_format)
+std::string construct_message(const RDP_format& deserialized_rdp) {
+    std::ostringstream messageStream;
+    messageStream << static_cast<int>(deserialized_rdp.type) << "|\n"
+                  << deserialized_rdp.dest_ip << "|\n" 
+                  << certificate_to_string(deserialized_rdp.cert) << "|\n"
+                  << deserialized_rdp.nonce << "|\n"
+                  << deserialized_rdp.time_stamp << "|\n";
+    return messageStream.str();
+}
+
+// メッセージを構築する関数(Fowarding_RDP_format)
 std::string construct_message(const Forwarding_RDP_format& deserialized_rdp) {
     std::ostringstream messageStream;
     messageStream << static_cast<int>(deserialized_rdp.rdp.type) << "|\n"
@@ -618,6 +572,54 @@ std::string calculateExpirationTime(int durationHours, const std::string& format
 
     return timeStream.str();
 }
+// Forwarding_RDP_formatを作成する関数
+Forwarding_RDP_format Makes_RDP(RDP_format RDP, std::array<unsigned char,256> receiver_signature, Certificate_Format receiver_cert) 
+{
+    Forwarding_RDP_format rdp;
+
+    rdp.rdp = RDP; // RDP_formatをコピー
+    // type の設定
+    rdp.rdp.type = MessageType::FORWARDING_RDP;
+    
+    //receiver_signature の設定
+    rdp.receiver_signature = receiver_signature;
+    //receiver_cert の設定
+    rdp.receiver_cert = receiver_cert;
+
+    //各要素の確認
+    std::cout << "---------------------------Forwarding_RDP---------------------------" << std::endl;
+    std::cout << "rdp.rdp.type: " << static_cast<int>(rdp.rdp.type) << std::endl;
+    std::cout << "rdp.rdp.dest_ip: " << rdp.rdp.dest_ip << std::endl;
+
+    std::cout << "rdp.rdp.cert.own_ip: " << rdp.rdp.cert.own_ip << std::endl;
+    std::cout << "rdp.rdp.cert.own_public_key: " << rdp.rdp.cert.own_public_key << std::endl;
+    std::cout << "rdp.rdp.cert.time_stamp: " << rdp.rdp.cert.time_stamp << std::endl;
+    std::cout << "rdp.rdp.cert.expires: " << rdp.rdp.cert.expires << std::endl;
+
+    std::cout << "rdp.rdp.nonce: " << rdp.rdp.nonce << std::endl;
+    std::cout << "rdp.rdp.time_stamp: " << rdp.rdp.time_stamp << std::endl;
+    std::cout << "rdp.rdp.signature" << std::endl;
+    for (size_t i =0; i< rdp.rdp.signature.size(); i++){
+        std::cout << std::hex << static_cast<int>(rdp.rdp.signature[i]) << " ";
+    }
+    std::cout << std::endl;
+
+    std::cout << "rdp.receiver_cert.own_ip: " << rdp.receiver_cert.own_ip << std::endl;
+    std::cout << "rdp.receiver_cert.own_public_key: " << rdp.receiver_cert.own_public_key << std::endl;
+    std::cout << "rdp.receiver_cert.time_stamp: " << rdp.receiver_cert.time_stamp << std::endl;
+    std::cout << "rdp.receiver_cert.expires: " << rdp.receiver_cert.expires << std::endl;
+
+    std::cout << "rdp.receiver_signature: " << std::endl;
+    for (size_t i =0; i< rdp.receiver_signature.size(); i++){
+        std::cout << std::hex << static_cast<int>(rdp.receiver_signature[i]) << " ";
+    }
+    std::cout << std::endl;
+
+    std::cout << "---------------------------Forwarding_RDP---------------------------" << std::endl;
+
+    return rdp;
+}
+
 
 Forwarding_REP_format Makes_REP(MessageType type,const char* dest_ip, Certificate_Format cert, std::uint32_t nonce,const char* time_stamp, std::array<unsigned char,256> signature, std::array<unsigned char,256> receiver_signature, Certificate_Format receiver_cert) 
 {
@@ -661,6 +663,13 @@ Certificate_Format Makes_Certificate(const char* own_ip,const char* own_public_k
     std::strncpy(Certificate.expires, expires, sizeof(Certificate.expires) - 1);
     Certificate.expires[sizeof(Certificate.expires) - 1] = '\0'; // Null-terminate
 
+    std::cout << "---------------------------Certificate---------------------------" << std::endl;
+    std::cout << "Certificate.own_ip: " << Certificate.own_ip << std::endl;
+    std::cout << "Certificate.own_public_key: " << Certificate.own_public_key << std::endl;
+    std::cout << "Certificate.time_stamp: " << Certificate.time_stamp << std::endl;
+    std::cout << "Certificate.expires: " << Certificate.expires << std::endl;
+    std::cout << "---------------------------Certificate---------------------------" << std::endl;
+
     return Certificate;
 }
 
@@ -677,9 +686,12 @@ InfoSet Makes_InfoSet(const char* ip, const uint32_t nonce, const char* time_sta
 
     return infoSet;
 }
+
+
+
 // 署名を生成する関数(固定長署名)
-std::vector<unsigned char> sign_message(EVP_PKEY* private_key, const std::string& message) {
-    std::vector<unsigned char> signature;
+std::array<unsigned char,256> size256_signMessage(EVP_PKEY* private_key, const std::string& message) {
+    std::array<unsigned char,256> signature = {0}; // 256バイトの署名を初期化
     EVP_MD_CTX* ctx = EVP_MD_CTX_new();
     if (!ctx) {
         std::cerr << "Failed to create EVP_MD_CTX" << std::endl;
@@ -698,25 +710,69 @@ std::vector<unsigned char> sign_message(EVP_PKEY* private_key, const std::string
         return signature;
     }
 
-    size_t siglen = 0;
-    if (EVP_DigestSignFinal(ctx, nullptr, &siglen) <= 0) {
+    size_t siglen = 256; // 署名の長さを指定（256バイト）
+    if (EVP_DigestSignFinal(ctx, nullptr, &siglen) <= 0) { // 署名の長さを取得し、siglenに格納
         std::cerr << "EVP_DigestSignFinal (get length) failed" << std::endl;
         EVP_MD_CTX_free(ctx);
         return signature;
     }
 
-    signature.resize(siglen);
+    /* 初期化時に0で埋めたのでおそらくここは必要ない。
+    if (siglen < 256) {
+        signature.resize(256, 0x00); // 0x00でパディング、検証の際はこの0を取り除く必要がある。
+    }
+    */
+
+    //signature.resize(siglen);
     if (EVP_DigestSignFinal(ctx, signature.data(), &siglen) <= 0) {
         std::cerr << "EVP_DigestSignFinal (sign) failed" << std::endl;
         EVP_MD_CTX_free(ctx);
         return signature;
     }
 
-    std::cout << "---------------------------signature generation is success-----------------" << std::endl;
-
     EVP_MD_CTX_free(ctx);
     return signature;
 }
+
+// std::vector<unsigned char> sign_message(EVP_PKEY* private_key, const std::string& message) {
+//     std::vector<unsigned char> signature;
+//     EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+//     if (!ctx) {
+//         std::cerr << "Failed to create EVP_MD_CTX" << std::endl;
+//         return signature;
+//     }
+
+//     if (EVP_DigestSignInit(ctx, nullptr, EVP_sha256(), nullptr, private_key) <= 0) {
+//         std::cerr << "EVP_DigestSignInit failed" << std::endl;
+//         EVP_MD_CTX_free(ctx);
+//         return signature;
+//     }
+
+//     if (EVP_DigestSignUpdate(ctx, message.c_str(), message.size()) <= 0) {
+//         std::cerr << "EVP_DigestSignUpdate failed" << std::endl;
+//         EVP_MD_CTX_free(ctx);
+//         return signature;
+//     }
+
+//     size_t siglen = 0;
+//     if (EVP_DigestSignFinal(ctx, nullptr, &siglen) <= 0) {
+//         std::cerr << "EVP_DigestSignFinal (get length) failed" << std::endl;
+//         EVP_MD_CTX_free(ctx);
+//         return signature;
+//     }
+
+//     signature.resize(siglen);
+//     if (EVP_DigestSignFinal(ctx, signature.data(), &siglen) <= 0) {
+//         std::cerr << "EVP_DigestSignFinal (sign) failed" << std::endl;
+//         EVP_MD_CTX_free(ctx);
+//         return signature;
+//     }
+
+//     std::cout << "---------------------------signature generation is success-----------------" << std::endl;
+
+//     EVP_MD_CTX_free(ctx);
+//     return signature;
+// }
 // 署名を検証する関数(可変長署名)
 bool verifySignature(EVP_PKEY* public_key, const std::string& message, const std::vector<unsigned char>& signature) {
     EVP_MD_CTX* ctx = EVP_MD_CTX_new();
@@ -853,7 +909,7 @@ int main() {
         return 1;
     }
 
-    std::cout << "bind success" << std::endl;
+    //std::cout << "bind success" << std::endl;
 
     while (true)
     {
@@ -867,9 +923,7 @@ int main() {
 
         // 受信処理
         std::tie(recv_buf, sender_ip_raw) = receving_process(sock);
-        std::cout << "sender_ip: " << sender_ip_raw << std::endl;
-        
-        // 受信処理
+        //std::cout << "sender_ip: " << sender_ip_raw << std::endl;
         
         // 公開鍵の取得
         EVP_PKEY* public_key = load_public_key("public_key.pem");
@@ -891,9 +945,22 @@ int main() {
             //std::cout.flush();
 
             if(static_cast<int>(packet_type) == 1) {
-                std::cout << "-----------------------------------RDP--------------------------------------" << std::endl;
                 RDP_format deserialized_rdp = {};
                 deserialize(recv_buf, deserialized_rdp);
+
+                //新たに受信したデータをnew_info_setに追加
+                new_info_set = Makes_InfoSet(deserialized_rdp.cert.own_ip, deserialized_rdp.nonce, deserialized_rdp.time_stamp);
+            
+                // 受信したメッセージのtime stamp:tとnonce:nが既に受信したものかどうかを確認する
+                if(isDuplicate(received_info_set, new_info_set)) {
+                    std::cout << "Duplicate message detected. Ignoring..." << std::endl;
+                    continue; // 重複している場合は無視
+                } else {
+                    std::cout << "New message detected. Adding to list..." << std::endl;
+                    received_info_set.push_back(new_info_set); // 新しいメッセージをリストに追加
+                }
+                std::cout << "-----------------------------------RDP--------------------------------------" << std::endl;
+                
                 //受信データを確認
                 std::cout << "deserialize_rdp.type:" << static_cast<int>(deserialized_rdp.type)<< std::endl;
                 std::cout << "deserialize_rdp.dest_ip:" << deserialized_rdp.dest_ip << std::endl;
@@ -911,17 +978,6 @@ int main() {
                 std::cout << std::endl;
                 std::cout << "-----------------------------------RDP--------------------------------------" << std::endl;
                 
-                //新たに受信したデータをnew_info_setに追加
-                new_info_set = Makes_InfoSet(deserialized_rdp.cert.own_ip, deserialized_rdp.nonce, deserialized_rdp.time_stamp);
-            
-                // 受信したメッセージのtime stamp:tとnonce:nが既に受信したものかどうかを確認する
-                if(isDuplicate(received_info_set, new_info_set)) {
-                    std::cout << "Duplicate message detected. Ignoring..." << std::endl;
-                    continue; // 重複している場合は無視
-                } else {
-                    std::cout << "New message detected. Adding to list..." << std::endl;
-                    received_info_set.push_back(new_info_set); // 新しいメッセージをリストに追加
-                }
                 std::cout << "New message received. Processing..." << std::endl;
             
                 // 宛先確認
@@ -971,7 +1027,7 @@ int main() {
                     
                     // REPをシリアライズ
                     std::vector<uint8_t> rep_buf;
-                    serialize_forwarding_rep(rep, rep_buf);
+                    //serialize(rep, rep_buf);
 
                     // REPを送信(宛先は一つ前の端末に向けて送信)
                     struct sockaddr_in rep_addr;
@@ -996,16 +1052,27 @@ int main() {
                     close(rep_sock);
 
                 } else {
+                //自分宛でないことを確認
                 std::cout << "This message is not for me. Forwarding..." << std::endl;
+    
+                //Forwarding_RDP_formatを作成
+                Forwarding_RDP_format forwarding_rdp = {};
 
+                // 署名を生成
+                std::string message = construct_message(deserialized_rdp);
+                std::array<unsigned char,256> signature = size256_signMessage(private_key, message);
+                if (signature.empty()) {
+                    std::cerr << "Failed to sign the message" << std::endl;
+                    return 1;
                 }
-                //deserialized_rdp.receiver_signature = signature;
+
+                // 転送端末の証明書を作成
+
                 // 現在時刻の取得
                 std::string Formatted_Time = get_time();
     
                 // 有効期限の取得
                 std::string expirationTime = calculateExpirationTime(24, Formatted_Time);
-
 
                 char own_ip[16] = {};
                 std::strncpy(own_ip, get_own_ip().c_str(), sizeof(own_ip) - 1);
@@ -1021,13 +1088,16 @@ int main() {
                         
                 // 転送端末の証明書を作成
                 Certificate_Format forwarder_certificate = Makes_Certificate(own_ip, own_public_key, formatted_Time, expiration_time);
+
+                // Forwarding_RDP_formatを作成
+                forwarding_rdp = Makes_RDP(deserialized_rdp, signature, forwarder_certificate);
             
-                //deserialized_rdp.receiver_cert = forwarder_certificate;
                 // Forwarding_RDP_format をシリアライズ
                 serialize(deserialized_rdp, send_buf.data());
 
                 //RDPならブロードキャスト転送する。
                 broadcast_send_process(send_buf);
+                }
             
             } else if(static_cast<int>(packet_type) == 2){
                 // REPのデシリアライズ
@@ -1074,20 +1144,20 @@ int main() {
                     std::strncpy(expiration_time, expirationTime.data(), sizeof(expiration_time) - 1);
 
                     std::string signed_message = construct_message_with_key(deserialized_rep, get_PublicKey_As_String(public_key));
-                    std::vector<unsigned char> signature = sign_message(private_key, signed_message);
-                    if (signature.empty()) {
-                        std::cerr << "Failed to sign the message" << std::endl;
-                        return 1;
-                    }
-                    memcpy(deserialized_rep.receiver_signature.data(), signature.data(), signature.size());
-                    //deserialized_rep.receiver_signature = signature;
+                    // //std::vector<unsigned char> signature = size256_signMessage(private_key, signed_message);
+                    // if (signature.empty()) {
+                    //     std::cerr << "Failed to sign the message" << std::endl;
+                    //     return 1;
+                    // }
+                    // memcpy(deserialized_rep.receiver_signature.data(), signature.data(), signature.size());
+                    // //deserialized_rep.receiver_signature = signature;
                 
                     // 転送端末の証明書を作成
                     Certificate_Format forwarder_certificate = Makes_Certificate(own_ip, own_public_key, formatted_Time, expiration_time);
                 
                     deserialized_rep.receiver_cert = forwarder_certificate;
                     // Forwarding_REP_format をシリアライズ
-                    serialize_forwarding_rep(deserialized_rep, send_buf);
+                    //serialize_forwarding_rep(deserialized_rep, send_buf);
                     //REPならユニキャスト転送する, next_ipは一つ前の端末のIPアドレスで設定する必要がある
                     unicast_send_process(send_buf, next_ip);
                 } else if(static_cast<int>(packet_type) == 3){

@@ -17,7 +17,7 @@
 #include <netdb.h>
 #include <ifaddrs.h>
 #include <cstring>
-#include "RSA/RSA.h"
+//#include "RSA/RSA.h"
 
 enum class MessageType : uint8_t {
     RDP = 0x01,
@@ -79,10 +79,6 @@ RDP_format Makes_RDP(MessageType type /*const char* source_ip*/, const char* des
     RDP_format rdp;
     // type の設定
     rdp.type = type;
-
-    // // source_ip の設定
-    // std::strncpy(rdp.source_ip, source_ip, sizeof(rdp.source_ip) - 1);
-    // rdp.source_ip[sizeof(rdp.source_ip) - 1] = '\0'; // ヌル終端を保証
 
     // dest_ip の設定
     std::strncpy(rdp.dest_ip, dest_ip, sizeof(rdp.dest_ip) - 1);
