@@ -21,7 +21,8 @@
 
 enum class MessageType : uint8_t {
     RDP = 0x01,
-    REP = 0x02
+    REP = 0x02,
+    ForwardRDP = 0x03
 };
 
 struct Certificate_Format {
@@ -897,18 +898,18 @@ int main() {
 
             if(static_cast<int>(packet_type) == 1)
             {
-                Forwarding_RDP_format deserialized_rdp = {};
+                RDP_format deserialized_rdp = {};
                 deserialize(recv_buf, deserialized_rdp);
-                std::cout << "deserialize_rdp.type:" << static_cast<int>(deserialized_rdp.rdp.type)<< std::endl;
+                std::cout << "deserialize_rdp.type:" << static_cast<int>(deserialized_rdp.type)<< std::endl;
                 
                 //Forwarding RDP formatからtime stamp:tとnonce:nをタプルで取得
                 //(deserialized_rdp.rdp.time_stamp, sender_ip_raw, deserialized_rdp.rdp.nonce);
-                std::cout << "Receving time_stamp:" << deserialized_rdp.rdp.time_stamp << std::endl;
-                std::cout << "Receving IP_address:"<< deserialized_rdp.rdp.source_ip << std::endl;
-                std::cout << "Receving nonce:"<< deserialized_rdp.rdp.nonce << std::endl;
+                std::cout << "Receving time_stamp:" << deserialized_rdp.time_stamp << std::endl;
+                std::cout << "Receving IP_address:"<< deserialized_rdp.source_ip << std::endl;
+                std::cout << "Receving nonce:"<< deserialized_rdp.nonce << std::endl;
 
                 //新たに受信したデータをnew_info_setに追加
-                new_info_set = Makes_InfoSet(deserialized_rdp.rdp.source_ip, deserialized_rdp.rdp.nonce, deserialized_rdp.rdp.time_stamp);
+                new_info_set = Makes_InfoSet(deserialized_rdp.source_ip, deserialized_rdp.nonce, deserialized_rdp.time_stamp);
 
                 //新たな受信メッセージを受信した場合、リストに追加
             

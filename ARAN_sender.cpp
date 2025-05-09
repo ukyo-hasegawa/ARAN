@@ -589,17 +589,17 @@ int main() {
     char own_public_key[256] = {};
     std::strncpy(own_public_key, get_PublicKey_As_String(public_key).c_str(), sizeof(own_public_key) - 1);
     own_public_key[sizeof(own_public_key) - 1] = '\0'; // null-terminate
-    printf("own_public_key: %s\n", own_public_key);
+    printf("own_public_key:%s\n", own_public_key);
 
     char formatted_Time[20] = {};
     std::strncpy(formatted_Time, Formatted_Time.data(), sizeof(formatted_Time) - 1);
     formatted_Time[sizeof(formatted_Time) - 1] = '\0'; // null-terminate
-    printf("formatted_Time: %s\n", formatted_Time);
+    printf("formatted_Time:%s\n", formatted_Time);
 
     char expiration_time[20] = {};
     std::strncpy(expiration_time, expirationTime.data(), sizeof(expiration_time) - 1);
     expiration_time[sizeof(expiration_time) - 1] = '\0'; // null-terminate
-    printf("expiration_time: %s\n", expiration_time);
+    printf("expiration_time:%s\n", expiration_time);
 
 
     // 送信元の公開鍵を取得して証明書を作成
