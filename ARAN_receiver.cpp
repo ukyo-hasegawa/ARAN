@@ -922,16 +922,16 @@ int main() {
                 }
                 std::cout << "New message received. Processing..." << std::endl;
                 // 署名の検証
-                std::string message = construct_message(deserialized_rdp);
-                if (!verifySignature(public_key, message, deserialized_rdp.rdp.signature.data(), deserialized_rdp.rdp.signature.size())) {
-                    std::cerr << "Signature verification failed!" << std::endl;
-                    continue;
-                }
-                std::cout << "Signature verification succeeded!" << std::endl;
+                // std::string message = construct_message(deserialized_rdp);
+                // if (!verifySignature(public_key, message, deserialized_rdp.signature.data(), deserialized_rdp.signature.size())) {
+                //     std::cerr << "Signature verification failed!" << std::endl;
+                //     continue;
+                // }
+                // std::cout << "Signature verification succeeded!" << std::endl;
             
             
                 // 宛先確認
-                if (deserialized_rdp.rdp.dest_ip == own_ip_address) {
+                if (deserialized_rdp.dest_ip == own_ip_address) {
                     std::cout << "This message is for me." << std::endl;
 
                     // 現在時刻の取得
@@ -956,10 +956,10 @@ int main() {
                     //自身の証明書を作成
                     Certificate_Format own_certificate = Makes_Certificate(own_ip, own_public_key, formatted_Time, expiration_time);
                     //署名サイズを出力
-                    std::cout << "Signature size:" << deserialized_rdp.rdp.signature.size() << std::endl;   
+                    std::cout << "Signature size:" << deserialized_rdp.signature.size() << std::endl;   
 
                     std::cout << "-------------------------------------Destination sends REP-------------------------------------" << std::endl;
-                    Forwarding_REP_format rep = Makes_REP(MessageType::REP, deserialized_rdp.rdp.source_ip, own_certificate, deserialized_rdp.rdp.nonce, deserialized_rdp.rdp.time_stamp, deserialized_rdp.rdp.signature , {}, {});
+                    Forwarding_REP_format rep = Makes_REP(MessageType::REP, deserialized_rdp.source_ip, own_certificate, deserialized_rdp.nonce, deserialized_rdp.time_stamp, deserialized_rdp.signature , {}, {});
                     std::cout << "rep.type: "<< static_cast<int>(rep.type) << std::endl;
                     std::cout << "rep.dest_ip:" << rep.dest_ip << std::endl;
                     std::cout << "rep.cert.own_ip" << rep.cert.own_ip << std::endl;
@@ -1005,29 +1005,29 @@ int main() {
                 std::cout << "This message is not for me. Forwarding..." << std::endl;
 
                     // 受信したメッセージの中に転送端末の署名および証明書がないかを確認
-                    if (!deserialized_rdp.receiver_signature.empty() && (strlen(deserialized_rdp.receiver_cert.own_ip)==0)) {
-                        std::cout << "Forwarder signature and certificate found. Removing them..." << std::endl;
-                        std::cout << "receiver_cert.own_ip:" << deserialized_rdp.receiver_cert.own_ip << std::endl;
+                    // if (!deserialized_rdp.receiver_signature.empty() && (strlen(deserialized_rdp.receiver_cert.own_ip)==0)) {
+                    //     std::cout << "Forwarder signature and certificate found. Removing them..." << std::endl;
+                    //     std::cout << "receiver_cert.own_ip:" << deserialized_rdp.receiver_cert.own_ip << std::endl;
 
-                        // 転送端末の署名および証明書を取り除く
-                        deserialized_rdp.receiver_signature.clear();
-                        deserialized_rdp.receiver_cert = Certificate_Format();
-                    } else {
-                        std::cout << "Forwarder signature and certificate not found." << std::endl;
-                    }
+                    //     // 転送端末の署名および証明書を取り除く
+                    //     deserialized_rdp.receiver_signature.clear();
+                    //     deserialized_rdp.receiver_cert = Certificate_Format();
+                    // } else {
+                    //     std::cout << "Forwarder signature and certificate not found." << std::endl;
+                    // }
                 }
 
                
                 // 自身の署名と証明書を追加して送信
                 std::cout << "------------------------------------- Forwarding RDP-------------------------------------" << std::endl;
-                std::string signed_message = construct_message_with_key(deserialized_rdp, get_PublicKey_As_String(public_key));
-                std::vector<unsigned char> signature = sign_message(private_key, signed_message);
-                if (signature.empty()) {
-                    std::cerr << "Failed to sign the message" << std::endl;
-                    return 1;
-                }
+                // std::string signed_message = construct_message_with_key(deserialized_rdp, get_PublicKey_As_String(public_key));
+                // std::vector<unsigned char> signature = sign_message(private_key, signed_message);
+                // if (signature.empty()) {
+                //     std::cerr << "Failed to sign the message" << std::endl;
+                //     return 1;
+                // }
                 
-                deserialized_rdp.receiver_signature = signature;
+                //deserialized_rdp.receiver_signature = signature;
                 // 現在時刻の取得
                 std::string Formatted_Time = get_time();
     
@@ -1050,7 +1050,7 @@ int main() {
                 // 転送端末の証明書を作成
                 Certificate_Format forwarder_certificate = Makes_Certificate(own_ip, own_public_key, formatted_Time, expiration_time);
             
-                deserialized_rdp.receiver_cert = forwarder_certificate;
+                //deserialized_rdp.receiver_cert = forwarder_certificate;
                 // Forwarding_RDP_format をシリアライズ
                 serialize(deserialized_rdp, send_buf.data());
 
