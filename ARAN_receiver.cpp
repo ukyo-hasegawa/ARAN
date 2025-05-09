@@ -948,11 +948,6 @@ int main() {
 
     while (true)
     {
-        //受信処理
-        struct sockaddr_in sender_addr;
-        socklen_t addr_len = sizeof(sender_addr);
-        memset(buf, 0, sizeof(buf));
-
         std::vector<uint8_t> recv_buf;
         std::string sender_ip_raw; //インターフェースから受信する生データ。おいおいchar[16]に格納する。
 
@@ -1095,11 +1090,12 @@ int main() {
 
                 // 署名を生成
                 std::string message = construct_message(deserialized_rdp);
-                std::array<unsigned char,256> signature = size256_signMessage(private_key, message);
-                if (signature.empty()) {
+                std::array<unsigned char,256> forwarder_signature = size256_signMessage(private_key, message);
+                if (forwarder_signature.empty()) {
                     std::cerr << "Failed to sign the message" << std::endl;
                     return 1;
                 }
+                std::cout << "fowarader_signature size:" << forwarder_signature.size() << std::endl;
 
                 // 転送端末の証明書を作成
 
@@ -1125,7 +1121,7 @@ int main() {
                 Certificate_Format forwarder_certificate = Makes_Certificate(own_ip, own_public_key, formatted_Time, expiration_time);
 
                 // Forwarding_RDP_formatを作成
-                forwarding_rdp = Makes_RDP(deserialized_rdp, signature, forwarder_certificate);
+                forwarding_rdp = Makes_RDP(deserialized_rdp, forwarder_signature, forwarder_certificate);
                 check_RDP(forwarding_rdp);
             
                 // Forwarding_RDP_format をシリアライズ
