@@ -1,3 +1,7 @@
+#include "../Data_construct/data_structure.h"
+#include <cstring.h>
+
+
 /*
 RDPのシリアライズ処理を行う関数等をここに記述します。
 */
@@ -31,7 +35,6 @@ void serialize(const RDP_format& rdp, unsigned char* buf) {
     //cert expires
     std::memcpy(buf + offset, rdp.cert.expires, sizeof(rdp.cert.expires));
     offset += sizeof(rdp.cert.expires);
-
 
     // nonce
     std::memcpy(buf + offset, &rdp.nonce, sizeof(rdp.nonce));
