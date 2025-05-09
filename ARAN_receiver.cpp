@@ -34,7 +34,7 @@ struct Certificate_Format {
 
 struct RDP_format {
     MessageType type; //1バイト
-    char source_ip[16]; //16バイト
+    //char source_ip[16]; //16バイト
     char dest_ip[16];
     Certificate_Format cert;
     std::uint32_t nonce;
@@ -172,9 +172,9 @@ void serialize(const Forwarding_RDP_format& rdp, unsigned char* buf) {
     buf[offset] = static_cast<uint8_t>(rdp.rdp.type);
     offset += sizeof(uint8_t);
 
-    //source_ip
-    std::memcpy(buf + offset, rdp.rdp.source_ip, sizeof(rdp.rdp.source_ip));
-    offset += sizeof(rdp.rdp.source_ip);
+    // //source_ip
+    // std::memcpy(buf + offset, rdp.rdp.source_ip, sizeof(rdp.rdp.source_ip));
+    // offset += sizeof(rdp.rdp.source_ip);
 
     //dest_ip
     std::memcpy(buf + offset, rdp.rdp.dest_ip, sizeof(rdp.rdp.dest_ip));
@@ -217,8 +217,8 @@ void serialize(const RDP_format& rdp, unsigned char* buf) {
     offset += sizeof(uint8_t);
 
     //source_ip
-    std::memcpy(buf + offset, rdp.source_ip, sizeof(rdp.source_ip));
-    offset += sizeof(rdp.source_ip);
+    // std::memcpy(buf + offset, rdp.source_ip, sizeof(rdp.source_ip));
+    // offset += sizeof(rdp.source_ip);
 
     //dest_ip
     std::memcpy(buf + offset, rdp.dest_ip, sizeof(rdp.dest_ip));
@@ -263,8 +263,8 @@ void deserialize(const std::vector<uint8_t>& buf, RDP_format& rdp) {
     //printf("rdp.type: %d\n",rdp.type);
 
     //source_ip
-    std::memcpy(rdp.source_ip, buf.data() + offset, sizeof(rdp.source_ip));
-    offset += sizeof(rdp.source_ip);
+    // std::memcpy(rdp.source_ip, buf.data() + offset, sizeof(rdp.source_ip));
+    // offset += sizeof(rdp.source_ip);
     //printf("rdp.source_ip: %s\n",rdp.source_ip);
 
     //dest_ip
@@ -893,25 +893,27 @@ int main() {
         try {
             //REPかRDPか、Forwarding_RDPかを判断。
             MessageType packet_type = get_packet_type(recv_buf);
-            std::cout << "packet_type: " << static_cast<int>(packet_type) << std::endl;
-            std::cout.flush();
+            //std::cout.flush();
 
             if(static_cast<int>(packet_type) == 1) {
                 std::cout << "-----------------------------------RDP--------------------------------------" << std::endl;
                 RDP_format deserialized_rdp = {};
                 deserialize(recv_buf, deserialized_rdp);
+                //受信データを確認
                 std::cout << "deserialize_rdp.type:" << static_cast<int>(deserialized_rdp.type)<< std::endl;
+                std::cout << "deserialize_rdp.dest_ip:" << deserialized_rdp.dest_ip << std::endl;
+                std::cout << "deserialize_rdp.cert.own_ip:" << deserialized_rdp.cert.own_ip << std::endl;
+                std::cout << "deserialize_rdp.cert.own_public_key:" << deserialized_rdp.cert.own_public_key << std::endl;
+                std::cout << "deserialize_rdp.cert.time_stamp:" << deserialized_rdp.cert.time_stamp << std::endl;
+                std::cout << "deserialize_rdp.cert.expires:" << deserialized_rdp.cert.expires << std::endl;
+                std::cout << "deserialize_rdp.nonce:" << deserialized_rdp.nonce << std::endl;
+                std::cout << "deserialize_rdp.time_stamp:" << deserialized_rdp.time_stamp << std::endl;
+                std::cout << "deserialize_rdp.signature.size:" << deserialized_rdp.signature.size() << std::endl;
+                std::cout << "deserialize_rdp.signature:" << deserialized_rdp.signature.data() << std::endl;
+                std::cout << "-----------------------------------RDP--------------------------------------" << std::endl;
                 
-                //Forwarding RDP formatからtime stamp:tとnonce:nをタプルで取得
-                //(deserialized_rdp.rdp.time_stamp, sender_ip_raw, deserialized_rdp.rdp.nonce);
-                std::cout << "Receving time_stamp:" << deserialized_rdp.time_stamp << std::endl;
-                std::cout << "Receving IP_address:"<< deserialized_rdp.source_ip << std::endl;
-                std::cout << "Receving nonce:"<< deserialized_rdp.nonce << std::endl;
-
                 //新たに受信したデータをnew_info_setに追加
-                new_info_set = Makes_InfoSet(deserialized_rdp.source_ip, deserialized_rdp.nonce, deserialized_rdp.time_stamp);
-
-                //新たな受信メッセージを受信した場合、リストに追加
+                new_info_set = Makes_InfoSet(deserialized_rdp.cert.own_ip, deserialized_rdp.nonce, deserialized_rdp.time_stamp);
             
                 // 受信したメッセージのtime stamp:tとnonce:nが既に受信したものかどうかを確認する
                 if(isDuplicate(received_info_set, new_info_set)) {
@@ -952,7 +954,7 @@ int main() {
                     std::cout << "Signature size:" << deserialized_rdp.signature.size() << std::endl;   
 
                     std::cout << "-------------------------------------Destination sends REP-------------------------------------" << std::endl;
-                    Forwarding_REP_format rep = Makes_REP(MessageType::REP, deserialized_rdp.source_ip, own_certificate, deserialized_rdp.nonce, deserialized_rdp.time_stamp, deserialized_rdp.signature , {}, {});
+                    Forwarding_REP_format rep = Makes_REP(MessageType::REP, deserialized_rdp.cert.own_ip, own_certificate, deserialized_rdp.nonce, deserialized_rdp.time_stamp, deserialized_rdp.signature , {}, {});
                     std::cout << "rep.type: "<< static_cast<int>(rep.type) << std::endl;
                     std::cout << "rep.dest_ip:" << rep.dest_ip << std::endl;
                     std::cout << "rep.cert.own_ip" << rep.cert.own_ip << std::endl;

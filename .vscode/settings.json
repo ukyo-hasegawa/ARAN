@@ -53,6 +53,7 @@
         "typeinfo": "cpp",
         "iomanip": "cpp",
         "list": "cpp",
-        "fstream": "cpp"
+        "fstream": "cpp",
+        "set": "cpp"
     }
 }
