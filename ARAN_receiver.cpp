@@ -262,11 +262,6 @@ void deserialize(const std::vector<uint8_t>& buf, RDP_format& rdp) {
     offset += sizeof(uint8_t);
     //printf("rdp.type: %d\n",rdp.type);
 
-    //source_ip
-    // std::memcpy(rdp.source_ip, buf.data() + offset, sizeof(rdp.source_ip));
-    // offset += sizeof(rdp.source_ip);
-    //printf("rdp.source_ip: %s\n",rdp.source_ip);
-
     //dest_ip
     std::memcpy(rdp.dest_ip, buf.data() + offset, sizeof(rdp.dest_ip));
     offset += sizeof(rdp.dest_ip);
@@ -300,7 +295,7 @@ void deserialize(const std::vector<uint8_t>& buf, RDP_format& rdp) {
     //time_stamp
     std::memcpy(rdp.time_stamp, buf.data() + offset, sizeof(rdp.time_stamp));
     offset += sizeof(rdp.time_stamp);
-    printf("rdp.time_stamp: %s\n",rdp.time_stamp);
+    //printf("rdp.time_stamp: %s\n",rdp.time_stamp);
 
     //signature
     std::memcpy(rdp.signature.data(), buf.data() + offset, rdp.signature.size());
@@ -909,7 +904,11 @@ int main() {
                 std::cout << "deserialize_rdp.nonce:" << deserialized_rdp.nonce << std::endl;
                 std::cout << "deserialize_rdp.time_stamp:" << deserialized_rdp.time_stamp << std::endl;
                 std::cout << "deserialize_rdp.signature.size:" << deserialized_rdp.signature.size() << std::endl;
-                std::cout << "deserialize_rdp.signature:" << deserialized_rdp.signature.data() << std::endl;
+                std::cout << "rdp.signature:" << std::endl;
+                for (size_t i = 0; i < deserialized_rdp.signature.size(); ++i) {
+                    std::cout << std::hex << static_cast<int>(deserialized_rdp.signature[i]) << " ";
+                }
+                std::cout << std::endl;
                 std::cout << "-----------------------------------RDP--------------------------------------" << std::endl;
                 
                 //新たに受信したデータをnew_info_setに追加
