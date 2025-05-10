@@ -139,6 +139,7 @@ size_t serialize(const RDP_format& rdp, unsigned char* buf) {
     //cert own_ip
     std::memcpy(buf + offset, rdp.cert.own_ip, sizeof(rdp.cert.own_ip));
     offset += sizeof(rdp.cert.own_ip);
+
     //cert own_public_key
     std::memcpy(buf + offset, rdp.cert.own_public_key, sizeof(rdp.cert.own_public_key));
     offset += sizeof(rdp.cert.own_public_key);
@@ -151,7 +152,6 @@ size_t serialize(const RDP_format& rdp, unsigned char* buf) {
     std::memcpy(buf + offset, rdp.cert.expires, sizeof(rdp.cert.expires));
     offset += sizeof(rdp.cert.expires);
 
-
     // nonce
     std::memcpy(buf + offset, &rdp.nonce, sizeof(rdp.nonce));
     offset += sizeof(rdp.nonce);
@@ -163,6 +163,12 @@ size_t serialize(const RDP_format& rdp, unsigned char* buf) {
     // signature
     std::memcpy(buf + offset, rdp.signature.data(), rdp.signature.size());
     offset += rdp.signature.size();
+
+    std::cout << "type: " << static_cast<int>(rdp.type) << std::endl;
+    std::cout << "dest_ip: " << rdp.dest_ip << std::endl;
+    std::cout << "cert pubkey[0]: " << static_cast<int>(rdp.cert.own_public_key[0]) << std::endl;
+    std::cout << "signature size: " << rdp.signature.size() << std::endl;
+    std::cout << "offset: " << offset << std::endl;
     
     return offset;
 }
@@ -467,51 +473,50 @@ std::string construct_message_with_key(const RDP_format& deserialized_rdp, const
     
     return messageStream.str();
 }
-
+//何をしてるのかはわからないが、256バイトの署名(固定)を生成している。
 std::array<unsigned char,256> size256_signMessage(EVP_PKEY* private_key, const std::string& message) {
+    
     std::array<unsigned char,256> signature = {0}; // 256バイトの署名を初期化
+    size_t siglen = 0;
     EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+
     if (!ctx) {
         std::cerr << "Failed to create EVP_MD_CTX" << std::endl;
-        return signature;
+        //return signature;
     }
 
     if (EVP_DigestSignInit(ctx, nullptr, EVP_sha256(), nullptr, private_key) <= 0) {
         std::cerr << "EVP_DigestSignInit failed" << std::endl;
         EVP_MD_CTX_free(ctx);
-        return signature;
+        //return signature;
     }
 
     if (EVP_DigestSignUpdate(ctx, message.c_str(), message.size()) <= 0) {
         std::cerr << "EVP_DigestSignUpdate failed" << std::endl;
         EVP_MD_CTX_free(ctx);
-        return signature;
+        //return signature;
     }
 
-    size_t siglen = 256; // 署名の長さを指定（256バイト）
     if (EVP_DigestSignFinal(ctx, nullptr, &siglen) <= 0) { // 署名の長さを取得し、siglenに格納
         std::cerr << "EVP_DigestSignFinal (get length) failed" << std::endl;
         EVP_MD_CTX_free(ctx);
-        return signature;
+        //return signature;
     }
 
-    /* 初期化時に0で埋めたのでおそらくここは必要ない。
-    if (siglen < 256) {
-        signature.resize(256, 0x00); // 0x00でパディング、検証の際はこの0を取り除く必要がある。
+    if(siglen != 256) {
+        EVP_MD_CTX_free(ctx);
+        std::cerr << "Signature length is not 256 bytes" << std::endl;
     }
-    */
 
-    //signature.resize(siglen);
     if (EVP_DigestSignFinal(ctx, signature.data(), &siglen) <= 0) {
         std::cerr << "EVP_DigestSignFinal (sign) failed" << std::endl;
         EVP_MD_CTX_free(ctx);
-        return signature;
+        //return signature;
     }
 
     EVP_MD_CTX_free(ctx);
     return signature;
 }
-
 
 bool verifySignature(EVP_PKEY* public_key, const std::string& message, const std::vector<unsigned char>& signature) {
     EVP_MD_CTX* ctx = EVP_MD_CTX_new();
@@ -544,6 +549,7 @@ bool verifySignature(EVP_PKEY* public_key, const std::string& message, const std
         return false;
     }
 }
+
 //乱数生成関数 何をやっているのかはわからないが、32bitの乱数を生成している。
 std::uint32_t generateRandom32bit() {
     std::random_device rd;  // 非決定的な乱数
