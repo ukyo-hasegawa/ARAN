@@ -679,14 +679,17 @@ Certificate_Format Makes_Certificate(const char* own_ip,const char* own_public_k
     std::strncpy(Certificate.expires, expires, sizeof(Certificate.expires) - 1);
     Certificate.expires[sizeof(Certificate.expires) - 1] = '\0'; // Null-terminate
 
-    std::cout << "---------------------------Certificate---------------------------" << std::endl;
-    std::cout << "Certificate.own_ip: " << Certificate.own_ip << std::endl;
-    std::cout << "Certificate.own_public_key: " << Certificate.own_public_key << std::endl;
-    std::cout << "Certificate.time_stamp: " << Certificate.time_stamp << std::endl;
-    std::cout << "Certificate.expires: " << Certificate.expires << std::endl;
-    std::cout << "---------------------------Certificate---------------------------" << std::endl;
-
     return Certificate;
+}
+
+void Check_certificate(const Certificate_Format& cert) {
+    // ここで証明書の中身の確認
+    std::cout << "---------------------------Check_certificate---------------------------" << std::endl;
+    std::cout << "Certificate.own_ip: " << cert.own_ip << std::endl;
+    std::cout << "Certificate.own_public_key: " << cert.own_public_key << std::endl;
+    std::cout << "Certificate.time_stamp: " << cert.time_stamp << std::endl;
+    std::cout << "Certificate.expires: " << cert.expires << std::endl;
+    std::cout << "---------------------------Check_certificate---------------------------" << std::endl;
 }
 
 //Infosetを作成する関数
@@ -1002,24 +1005,8 @@ int main() {
                     std::cout << "New message detected. Adding to list..." << std::endl;
                     received_info_set.push_back(new_info_set); // 新しいメッセージをリストに追加
                 }
-                std::cout << "-----------------------------------RDP--------------------------------------" << std::endl;
-                
-                //受信データを確認
-                std::cout << "deserialize_rdp.type:" << static_cast<int>(deserialized_rdp.type)<< std::endl;
-                std::cout << "deserialize_rdp.dest_ip:" << deserialized_rdp.dest_ip << std::endl;
-                std::cout << "deserialize_rdp.cert.own_ip:" << deserialized_rdp.cert.own_ip << std::endl;
-                std::cout << "deserialize_rdp.cert.own_public_key:" << deserialized_rdp.cert.own_public_key << std::endl;
-                std::cout << "deserialize_rdp.cert.time_stamp:" << deserialized_rdp.cert.time_stamp << std::endl;
-                std::cout << "deserialize_rdp.cert.expires:" << deserialized_rdp.cert.expires << std::endl;
-                std::cout << "deserialize_rdp.nonce:" << deserialized_rdp.nonce << std::endl;
-                std::cout << "deserialize_rdp.time_stamp:" << deserialized_rdp.time_stamp << std::endl;
-                std::cout << "deserialize_rdp.signature.size:" << deserialized_rdp.signature.size() << std::endl;
-                std::cout << "rdp.signature:" << std::endl;
-                for (size_t i = 0; i < deserialized_rdp.signature.size(); ++i) {
-                    std::cout << std::hex << static_cast<int>(deserialized_rdp.signature[i]) << " ";
-                }
-                std::cout << std::endl;
-                std::cout << "-----------------------------------RDP--------------------------------------" << std::endl;
+
+                check_RDP(deserialized_rdp);
                 
                 std::cout << "New message received. Processing..." << std::endl;
             
@@ -1108,7 +1095,7 @@ int main() {
                     std::cerr << "Failed to sign the message" << std::endl;
                     return 1;
                 }
-                std::cout << "fowarader_signature size:" << forwarder_signature.size() << std::endl;
+                //std::cout << "forwarder_signature size:" << forwarder_signature.size() << std::endl;
 
                 // 転送端末の証明書を作成
 
@@ -1235,8 +1222,12 @@ int main() {
                     }
 
                     //付与されている署名の除去(0バイトの配列にする)
+                    std::cout <<"------------------------------------remove receiver_signature------------------------------------" << std::endl;
                     std::memset(deserialized_rdp.receiver_signature.data(), 0, sizeof(deserialized_rdp.receiver_signature));
                     deserialized_rdp.receiver_cert = Certificate_Format();
+                    check_RDP(deserialized_rdp);
+                    std::cout <<"------------------------------------remove receiver_signature------------------------------------" << std::endl;
+                    
 
                     // 現在時刻の取得
                     std::string Formatted_Time = get_time();
@@ -1264,7 +1255,11 @@ int main() {
 
                     // 転送端末の署名を付与
                     deserialized_rdp = Makes_RDP(deserialized_rdp.rdp, signature, forwarder_certificate);
+                    //完成形を確認
+                    std::cout << "------------------------------------add receiver_signature and certificate------------------------------------" << std::endl;
                     check_RDP(deserialized_rdp);
+                    std::cout << "------------------------------------add receiver_signature and certificate------------------------------------" << std::endl;
+                    
             
                     // Forwarding_RDP_format をシリアライズ
                     serialize(deserialized_rdp, send_buf.data());

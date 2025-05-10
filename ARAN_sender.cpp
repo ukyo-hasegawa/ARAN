@@ -33,7 +33,6 @@ struct Certificate_Format {
 
 struct RDP_format {
     MessageType type; //1バイト
-    //char source_ip[16]; //16バイト
     char dest_ip[16];
     Certificate_Format cert;
     std::uint32_t nonce; //4バイト
@@ -95,26 +94,29 @@ RDP_format Makes_RDP(MessageType type /*const char* source_ip*/, const char* des
     // signature の設定
     rdp.signature = signature;
 
-    //RDPの各要素を表示
-    std::cout << "-----------------------------------RDP--------------------------------------" << std::endl;
-    std::cout << "rdp.type:" << static_cast<int>(rdp.type) << std::endl;
-    //std::cout << "rdp.source_ip:" << rdp.source_ip << std::endl;
-    std::cout << "rdp.dest_ip:" << rdp.dest_ip << std::endl;
-    std::cout << "rdp.cert.own_ip:" << rdp.cert.own_ip << std::endl;
-    std::cout << "rdp.cert.own_public_key:" << rdp.cert.own_public_key << std::endl;
-    std::cout << "rdp.cert.time_stamp:" << rdp.cert.time_stamp << std::endl;
-    std::cout << "rdp.cert.expires:" << rdp.cert.expires << std::endl;
-    std::cout << "rdp.nonce:" << rdp.nonce << std::endl;
-    std::cout << "rdp.time_stamp:" << rdp.time_stamp << std::endl;
-    std::cout << "rdp.signature.size:" << rdp.signature.size() << std::endl;
-    std::cout << "rdp.signature:" << std::endl;
-    for (size_t i = 0; i < rdp.signature.size(); ++i) {
+    return rdp;
+}
+
+// 受信したRDP_formatを確認する関数
+void check_RDP(const RDP_format& rdp) {
+    //各要素の確認
+    std::cout << "---------------------------RDP---------------------------" << std::endl;
+    std::cout << "rdp.type: " << static_cast<int>(rdp.type) << std::endl;
+    std::cout << "rdp.dest_ip: " << rdp.dest_ip << std::endl;
+
+    std::cout << "rdp.cert.own_ip: " << rdp.cert.own_ip << std::endl;
+    std::cout << "rdp.cert.own_public_key: " << rdp.cert.own_public_key << std::endl;
+    std::cout << "rdp.cert.time_stamp: " << rdp.cert.time_stamp << std::endl;
+    std::cout << "rdp.cert.expires: " << rdp.cert.expires << std::endl;
+
+    std::cout << "rdp.nonce: " << rdp.nonce << std::endl;
+    std::cout << "rdp.time_stamp: " << rdp.time_stamp << std::endl;
+    std::cout << "rdp.signature" << std::endl;
+    for (size_t i =0; i< rdp.signature.size(); i++){
         std::cout << std::hex << static_cast<int>(rdp.signature[i]) << " ";
     }
-    std::cout << std::endl;
-    std::cout << "-----------------------------------RDP--------------------------------------" << std::endl;
-
-    return rdp;
+    std::cout << std::dec<<std::endl; // 10進数に戻す
+    std::cout << "---------------------------RDP---------------------------" << std::endl;
 }
 
 Forwarding_RDP_format Forwarding_RDP_makes(RDP_format RDP, std::array<unsigned char,256> receiver_signature, Certificate_Format receiver_cert) {
@@ -125,9 +127,8 @@ Forwarding_RDP_format Forwarding_RDP_makes(RDP_format RDP, std::array<unsigned c
     return rdp;
 }
 //シリアライズ、bufを動的に確保するバージョン。こちらも検討
-std::vector<uint8_t> serialize(const RDP_format& rdp) {
-    size_t total_size = 
-        sizeof(rdp.type) +
+std::vector<uint8_t> serialize(const RDP_format rdp) {
+    size_t total_size = sizeof(uint8_t) + // type
         sizeof(rdp.dest_ip) +
         sizeof(rdp.cert.own_ip) +
         sizeof(rdp.cert.own_public_key) +
@@ -137,40 +138,36 @@ std::vector<uint8_t> serialize(const RDP_format& rdp) {
         sizeof(rdp.time_stamp) +
         rdp.signature.size();
 
-    std::cout << "total_size: " << total_size << std::endl;
-
     std::vector<uint8_t> buf(total_size);  // 必要なサイズで確保
     size_t offset = 0;
 
     buf[offset] = static_cast<uint8_t>(rdp.type);
     offset += sizeof(rdp.type);
-
+    
     std::memcpy(buf.data() + offset, rdp.dest_ip, sizeof(rdp.dest_ip));
     offset += sizeof(rdp.dest_ip);
-
+    
     std::memcpy(buf.data() + offset, rdp.cert.own_ip, sizeof(rdp.cert.own_ip));
     offset += sizeof(rdp.cert.own_ip);
-
+    
     std::memcpy(buf.data() + offset, rdp.cert.own_public_key, sizeof(rdp.cert.own_public_key));
     offset += sizeof(rdp.cert.own_public_key);
-
+    
     std::memcpy(buf.data() + offset, rdp.cert.time_stamp, sizeof(rdp.cert.time_stamp));
     offset += sizeof(rdp.cert.time_stamp);
-
+    
     std::memcpy(buf.data() + offset, rdp.cert.expires, sizeof(rdp.cert.expires));
     offset += sizeof(rdp.cert.expires);
-
+    
     std::memcpy(buf.data() + offset, &rdp.nonce, sizeof(rdp.nonce));
     offset += sizeof(rdp.nonce);
-
+    
     std::memcpy(buf.data() + offset, rdp.time_stamp, sizeof(rdp.time_stamp));
     offset += sizeof(rdp.time_stamp);
 
     std::memcpy(buf.data() + offset, rdp.signature.data(), rdp.signature.size());
     offset += rdp.signature.size();
-
-    std::cout << "offset:" << offset << std::endl;
-
+    
     // 最終チェック（安全のため）
     if (offset != total_size) {
         throw std::runtime_error("Serialize error: size mismatch");
@@ -217,17 +214,9 @@ size_t serialize(const RDP_format& rdp, unsigned char* buf) {
     // signature
     std::memcpy(buf + offset, rdp.signature.data(), rdp.signature.size());
     offset += rdp.signature.size();
-
-    std::cout << "type: " << static_cast<int>(rdp.type) << std::endl;
-    std::cout << "dest_ip: " << rdp.dest_ip << std::endl;
-    std::cout << "cert pubkey[0]: " << static_cast<int>(rdp.cert.own_public_key[0]) << std::endl;
-    std::cout << "signature size: " << rdp.signature.size() << std::endl;
-    std::cout << "offset: " << offset << std::endl;
     
     return offset;
 }
-
-
 
 // デシリアライズ処理(RDP)
 void deserialize(const std::vector<uint8_t>& buf, RDP_format& rdp) {
@@ -236,10 +225,6 @@ void deserialize(const std::vector<uint8_t>& buf, RDP_format& rdp) {
     // type
     rdp.type = static_cast<MessageType>(buf[offset]);
     offset += sizeof(uint8_t);
-
-    // // Deserialize source_ip
-    // std::memcpy(rdp.source_ip, buf.data() + offset, sizeof(rdp.source_ip));
-    // offset += sizeof(rdp.source_ip);
 
     // Deserialize dest_ip
     std::memcpy(rdp.dest_ip, buf.data() + offset, sizeof(rdp.dest_ip));
@@ -370,7 +355,7 @@ std::tuple<std::vector<uint8_t>, std::string> receving_process(int sock) {
     std::cout << "-----------------------------------receive data--------------------------------------" << std::endl;
 
 
-    std::cout << "Received data size: " << recv_buf.size() << " bytes" << std::endl;
+    //std::cout << "Received data size: " << recv_buf.size() << " bytes" << std::endl;
     std::cout << std::dec << std::endl; // 10進数に戻す
 
 
@@ -690,10 +675,7 @@ int main() {
         close(sock);
         return 1;
     }
-    std::cout << "signature size: " << signature.size() << std::endl;
     
-    std::memcpy(test_rdp1.signature.data(),signature.data(),size256_signMessage(private_key, message).size());
-    std::cout << "signature size(test_rdp1.signature): " << test_rdp1.signature.size() << std::endl;
     if (test_rdp1.signature.empty()) return -1;
 
     //乱数の生成
@@ -705,9 +687,8 @@ int main() {
     std::vector<uint8_t> serialized_data;    // シリアライズ処理
     try {
     serialized_data = serialize(test_rdp1);
-    std::cout << "serialize " << serialized_data.size() << " バイト" << std::endl;
     } catch (const std::exception& e) {
-    std::cerr << "serialize 失敗: " << e.what() << std::endl;
+    std::cerr << "Failed serialize generation: " << e.what() << std::endl;
     }   
 
     // データ送信
@@ -729,7 +710,7 @@ int main() {
         try {
             // パケットタイプを取得
             MessageType packet_type = get_packet_type(recv_buf);
-            std::cout << "Received packet_type:" << static_cast<int>(packet_type) << std::endl;
+            //std::cout << "Received packet_type:" << static_cast<int>(packet_type) << std::endl;
             
             if (packet_type == MessageType::REP) {
                 // REP メッセージのデシリアライズ
