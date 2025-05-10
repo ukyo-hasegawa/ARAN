@@ -126,7 +126,7 @@ Forwarding_RDP_format Forwarding_RDP_makes(RDP_format RDP, std::array<unsigned c
 }
 //シリアライズ、bufを動的に確保するバージョン。こちらも検討
 std::vector<uint8_t> serialize(const RDP_format& rdp) {
-    constexpr size_t total_size = 
+    size_t total_size = 
         sizeof(rdp.type) +
         sizeof(rdp.dest_ip) +
         sizeof(rdp.cert.own_ip) +
@@ -527,43 +527,37 @@ std::string construct_message_with_key(const RDP_format& deserialized_rdp, const
 }
 //何をしてるのかはわからないが、256バイトの署名(固定)を生成している。
 std::array<unsigned char,256> size256_signMessage(EVP_PKEY* private_key, const std::string& message) {
-    
-    std::array<unsigned char,256> signature = {0}; // 256バイトの署名を初期化
+    std::array<unsigned char,256> signature = {0};
     size_t siglen = 0;
     EVP_MD_CTX* ctx = EVP_MD_CTX_new();
 
     if (!ctx) {
-        std::cerr << "Failed to create EVP_MD_CTX" << std::endl;
-        //return signature;
+        throw std::runtime_error("Failed to create EVP_MD_CTX");
     }
 
     if (EVP_DigestSignInit(ctx, nullptr, EVP_sha256(), nullptr, private_key) <= 0) {
-        std::cerr << "EVP_DigestSignInit failed" << std::endl;
         EVP_MD_CTX_free(ctx);
-        //return signature;
+        throw std::runtime_error("EVP_DigestSignInit failed");
     }
 
     if (EVP_DigestSignUpdate(ctx, message.c_str(), message.size()) <= 0) {
-        std::cerr << "EVP_DigestSignUpdate failed" << std::endl;
         EVP_MD_CTX_free(ctx);
-        //return signature;
+        throw std::runtime_error("EVP_DigestSignUpdate failed");
     }
 
-    if (EVP_DigestSignFinal(ctx, nullptr, &siglen) <= 0) { // 署名の長さを取得し、siglenに格納
-        std::cerr << "EVP_DigestSignFinal (get length) failed" << std::endl;
+    if (EVP_DigestSignFinal(ctx, nullptr, &siglen) <= 0) {
         EVP_MD_CTX_free(ctx);
-        //return signature;
+        throw std::runtime_error("EVP_DigestSignFinal (get length) failed");
     }
 
-    if(siglen != 256) {
+    if (siglen != 256) {
         EVP_MD_CTX_free(ctx);
-        std::cerr << "Signature length is not 256 bytes" << std::endl;
+        throw std::runtime_error("Signature length is not 256 bytes (actual: " + std::to_string(siglen) + ")");
     }
 
     if (EVP_DigestSignFinal(ctx, signature.data(), &siglen) <= 0) {
-        std::cerr << "EVP_DigestSignFinal (sign) failed" << std::endl;
         EVP_MD_CTX_free(ctx);
-        //return signature;
+        throw std::runtime_error("EVP_DigestSignFinal (sign) failed");
     }
 
     EVP_MD_CTX_free(ctx);
@@ -682,7 +676,16 @@ int main() {
     
     // 署名対象メッセージを作成
     std::string message = construct_message(test_rdp1);
-    std::array<unsigned char,256> signature = size256_signMessage(private_key, message);
+    std::array<unsigned char,256> signature = {0};
+    try {
+        signature = size256_signMessage(private_key, message);
+    } catch (const std::exception& e) {
+        std::cerr << "Error signing message: " << e.what() << std::endl;
+        EVP_PKEY_free(private_key);
+        EVP_PKEY_free(public_key);
+        close(sock);
+        return 1;
+    }
     std::cout << "signature size: " << signature.size() << std::endl;
     
     std::memcpy(test_rdp1.signature.data(),signature.data(),size256_signMessage(private_key, message).size());
@@ -703,17 +706,16 @@ int main() {
     //RDPを作成
     test_rdp1 = Makes_RDP(MessageType::RDP,"10.0.0.4",test_cert1,nonce,formatted_Time,signature); //宛先は一旦手打ちで。
     
-
-    // シリアライズ処理
-    std::vector<uint8_t> buf(2048); //unsigned char buf[2048];はどこにアクセスするかわからないので、vectorに変更
-    size_t used = serialize(test_rdp1, buf.data());
-    buf.resize(used);
-    std::cout << "---------------------------------------------send_buf size--------------------------------------------" << std::endl;
-    std::cout << buf.size() << std::endl;
-    std::cout << "---------------------------------------------send_buf size--------------------------------------------" << std::endl;
+    std::vector<uint8_t> serialized_data;    // シリアライズ処理
+    try {
+    serialized_data = serialize(test_rdp1);
+    std::cout << "serialize 成功: " << serialized_data.size() << " バイト" << std::endl;
+    } catch (const std::exception& e) {
+    std::cerr << "serialize 失敗: " << e.what() << std::endl;
+    }   
 
     // データ送信
-    if (send_process(buf)) {
+    if (send_process(serialized_data)) {
         std::cout << "Message sent successfully" << std::endl;
     }
 
