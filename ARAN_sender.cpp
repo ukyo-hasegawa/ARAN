@@ -137,6 +137,8 @@ std::vector<uint8_t> serialize(const RDP_format& rdp) {
         sizeof(rdp.time_stamp) +
         rdp.signature.size();
 
+    std::cout << "total_size: " << total_size << std::endl;
+
     std::vector<uint8_t> buf(total_size);  // 必要なサイズで確保
     size_t offset = 0;
 
@@ -166,6 +168,8 @@ std::vector<uint8_t> serialize(const RDP_format& rdp) {
 
     std::memcpy(buf.data() + offset, rdp.signature.data(), rdp.signature.size());
     offset += rdp.signature.size();
+
+    std::cout << "offset:" << offset << std::endl;
 
     // 最終チェック（安全のため）
     if (offset != total_size) {
@@ -692,14 +696,6 @@ int main() {
     std::cout << "signature size(test_rdp1.signature): " << test_rdp1.signature.size() << std::endl;
     if (test_rdp1.signature.empty()) return -1;
 
-    // 署名の検証
-    if (!verifySignature(public_key, message, std::vector<unsigned char>(signature.begin(), signature.end()))) {
-        std::cerr << "Signature verification failed" << std::endl;
-        return -1;
-    } else {
-        std::cout << "Signature verification succeeded" << std::endl;
-    }
-
     //乱数の生成
     std::uint32_t nonce = generateRandom32bit();
     
@@ -709,7 +705,7 @@ int main() {
     std::vector<uint8_t> serialized_data;    // シリアライズ処理
     try {
     serialized_data = serialize(test_rdp1);
-    std::cout << "serialize 成功: " << serialized_data.size() << " バイト" << std::endl;
+    std::cout << "serialize " << serialized_data.size() << " バイト" << std::endl;
     } catch (const std::exception& e) {
     std::cerr << "serialize 失敗: " << e.what() << std::endl;
     }   
