@@ -510,6 +510,12 @@ std::string construct_message(const RDP_format& deserialized_rdp) {
                   << deserialized_rdp.nonce << "|\n"
                   << deserialized_rdp.time_stamp << "|\n";
 
+    //出来上がったメッセージを出力
+    std::cout << "-------------------------Constructed message--------------------------- " << std::endl;
+    std::cout << messageStream.str() << std::endl;
+    std::cout << "-------------------------Constructed message--------------------------- " << std::endl;
+
+
     return messageStream.str();
 }
 
@@ -1211,7 +1217,7 @@ int main() {
 
                     //検証のためtypeをRDPに戻す
                     deserialized_rdp.rdp.type = MessageType::RDP;
-                    std::string message = construct_message(deserialized_rdp.rdp);
+                    std::string message = construct_message(deserialized_rdp);
                     
                     // 署名の検証
                     if (!verifySignature256(public_key, message, deserialized_rdp.receiver_signature)) {
@@ -1222,11 +1228,11 @@ int main() {
                     }
 
                     //付与されている署名の除去(0バイトの配列にする)
-                    std::cout <<"------------------------------------remove receiver_signature------------------------------------" << std::endl;
+                    std::cout <<"--------------------------remove receiver_signature-------------------------" << std::endl;
                     std::memset(deserialized_rdp.receiver_signature.data(), 0, sizeof(deserialized_rdp.receiver_signature));
                     deserialized_rdp.receiver_cert = Certificate_Format();
                     check_RDP(deserialized_rdp);
-                    std::cout <<"------------------------------------remove receiver_signature------------------------------------" << std::endl;
+                    std::cout <<"------------------------remove receiver_signature--------------------------" << std::endl;
                     
 
                     // 現在時刻の取得
@@ -1253,12 +1259,12 @@ int main() {
                         return 1;
                     }
 
-                    // 転送端末の署名を付与
+                    // 転送端末の署名を付与(type:RDP時の署名であることに注意)
                     deserialized_rdp = Makes_RDP(deserialized_rdp.rdp, signature, forwarder_certificate);
                     //完成形を確認
-                    std::cout << "------------------------------------add receiver_signature and certificate------------------------------------" << std::endl;
+                    std::cout << "--------------------------------add receiver_signature and certificate------------------------------------" << std::endl;
                     check_RDP(deserialized_rdp);
-                    std::cout << "------------------------------------add receiver_signature and certificate------------------------------------" << std::endl;
+                    std::cout << "------------------------------add receiver_signature and certificate------------------------------------" << std::endl;
                     
             
                     // Forwarding_RDP_format をシリアライズ

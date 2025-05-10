@@ -29,6 +29,7 @@ struct Certificate_Format {
     char own_public_key[256]; //256byteの公開鍵 ここはunsigned charにするか要検討
     char time_stamp[20]; //20byteのタイムスタンプ
     char expires[20]; //20byteの有効期限
+    std::array<unsigned char,256> signature; //256byteの署名
 };
 
 struct RDP_format {
@@ -57,7 +58,7 @@ struct Forwarding_REP_format {
     Certificate_Format receiver_cert;
 };
 
-Certificate_Format Makes_Certificate(const char* own_ip,const char* own_public_key,const char* t,const char* expires) { //own_public_keyはunsigned charにするか要検討
+Certificate_Format Makes_Certificate(const char* own_ip,const char* own_public_key,const char* t,const char* expires, std::array<unsigned char,256> signature) { //own_public_keyはunsigned charにするか要検討
     Certificate_Format Certificate = {};
     std::strncpy(Certificate.own_ip, own_ip, sizeof(Certificate.own_ip) - 1);
     Certificate.own_ip[sizeof(Certificate.own_ip) - 1] = '\0'; // Null-terminate
@@ -70,6 +71,8 @@ Certificate_Format Makes_Certificate(const char* own_ip,const char* own_public_k
 
     std::strncpy(Certificate.expires, expires, sizeof(Certificate.expires) - 1);
     Certificate.expires[sizeof(Certificate.expires) - 1] = '\0'; // Null-terminate
+
+    Certificate.signature = signature;
 
     return Certificate;
 }
@@ -108,6 +111,11 @@ void check_RDP(const RDP_format& rdp) {
     std::cout << "rdp.cert.own_public_key: " << rdp.cert.own_public_key << std::endl;
     std::cout << "rdp.cert.time_stamp: " << rdp.cert.time_stamp << std::endl;
     std::cout << "rdp.cert.expires: " << rdp.cert.expires << std::endl;
+    std::cout << "rdp.cert.signature:" << std::endl;
+    for(size_t i = 0; i<rdp.cert.signature.size(); i++) {
+        std::cout << std::hex << static_cast<int>(rdp.cert.signature[i]) << " ";
+    } 
+    std::cout << std::dec << std::endl; // 10進数に戻す
 
     std::cout << "rdp.nonce: " << rdp.nonce << std::endl;
     std::cout << "rdp.time_stamp: " << rdp.time_stamp << std::endl;
@@ -117,6 +125,22 @@ void check_RDP(const RDP_format& rdp) {
     }
     std::cout << std::dec<<std::endl; // 10進数に戻す
     std::cout << "---------------------------RDP---------------------------" << std::endl;
+}
+
+void Check_certificate(const Certificate_Format& cert) {
+    // ここで証明書の中身の確認
+    std::cout << "---------------------------Check_certificate---------------------------" << std::endl;
+    std::cout << "Certificate.own_ip: " << cert.own_ip << std::endl;
+    std::cout << "Certificate.own_public_key: " << cert.own_public_key << std::endl;
+    std::cout << "Certificate.time_stamp: " << cert.time_stamp << std::endl;
+    std::cout << "Certificate.expires: " << cert.expires << std::endl;
+    std::cout << "rdp.cert.signature:" << std::endl;
+    for(size_t i = 0; i<cert.signature.size(); i++) {
+        std::cout << std::hex << static_cast<int>(cert.signature[i]) << " ";
+    } 
+    std::cout << std::dec << std::endl; // 10進数に戻す
+
+    std::cout << "---------------------------Check_certificate---------------------------" << std::endl;
 }
 
 Forwarding_RDP_format Forwarding_RDP_makes(RDP_format RDP, std::array<unsigned char,256> receiver_signature, Certificate_Format receiver_cert) {
@@ -134,6 +158,7 @@ std::vector<uint8_t> serialize(const RDP_format rdp) {
         sizeof(rdp.cert.own_public_key) +
         sizeof(rdp.cert.time_stamp) +
         sizeof(rdp.cert.expires) +
+        sizeof(rdp.cert.signature) + 
         sizeof(rdp.nonce) +
         sizeof(rdp.time_stamp) +
         rdp.signature.size();
@@ -158,6 +183,9 @@ std::vector<uint8_t> serialize(const RDP_format rdp) {
     
     std::memcpy(buf.data() + offset, rdp.cert.expires, sizeof(rdp.cert.expires));
     offset += sizeof(rdp.cert.expires);
+
+    std::memcpy(buf.data() + offset, rdp.cert.signature.data(), rdp.cert.signature.size());
+    offset += sizeof(rdp.cert.signature);
     
     std::memcpy(buf.data() + offset, &rdp.nonce, sizeof(rdp.nonce));
     offset += sizeof(rdp.nonce);
@@ -176,51 +204,11 @@ std::vector<uint8_t> serialize(const RDP_format rdp) {
     return buf;
 }
 
-size_t serialize(const RDP_format& rdp, unsigned char* buf) {
-    size_t offset = 0;
-
-    //type
-    buf[offset] = static_cast<uint8_t>(rdp.type);
-    offset += sizeof(uint8_t);
-
-    //dest_ip
-    std::memcpy(buf + offset, rdp.dest_ip, sizeof(rdp.dest_ip));
-    offset += sizeof(rdp.dest_ip);
-
-    //cert own_ip
-    std::memcpy(buf + offset, rdp.cert.own_ip, sizeof(rdp.cert.own_ip));
-    offset += sizeof(rdp.cert.own_ip);
-
-    //cert own_public_key
-    std::memcpy(buf + offset, rdp.cert.own_public_key, sizeof(rdp.cert.own_public_key));
-    offset += sizeof(rdp.cert.own_public_key);
-
-    //cert time_stamp
-    std::memcpy(buf + offset, rdp.cert.time_stamp, sizeof(rdp.cert.time_stamp));
-    offset += sizeof(rdp.cert.time_stamp);
-
-    //cert expires
-    std::memcpy(buf + offset, rdp.cert.expires, sizeof(rdp.cert.expires));
-    offset += sizeof(rdp.cert.expires);
-
-    // nonce
-    std::memcpy(buf + offset, &rdp.nonce, sizeof(rdp.nonce));
-    offset += sizeof(rdp.nonce);
-
-    // time_stamp
-    std::memcpy(buf + offset, rdp.time_stamp, sizeof(rdp.time_stamp));
-    offset += sizeof(rdp.time_stamp);
-
-    // signature
-    std::memcpy(buf + offset, rdp.signature.data(), rdp.signature.size());
-    offset += rdp.signature.size();
-    
-    return offset;
-}
-
 // デシリアライズ処理(RDP)
-void deserialize(const std::vector<uint8_t>& buf, RDP_format& rdp) {
+RDP_format deserialize(std::vector<uint8_t> buf) {
+
     size_t offset = 0;
+    RDP_format rdp = {};
 
     // type
     rdp.type = static_cast<MessageType>(buf[offset]);
@@ -230,18 +218,26 @@ void deserialize(const std::vector<uint8_t>& buf, RDP_format& rdp) {
     std::memcpy(rdp.dest_ip, buf.data() + offset, sizeof(rdp.dest_ip));
     offset += sizeof(rdp.dest_ip);
 
-    // Deserialize cert (own_ip, t, expires)
+    // Deserialize cert (own_ip, t, expires,signature)
     std::memcpy(rdp.cert.own_ip, buf.data() + offset, sizeof(rdp.cert.own_ip));
     offset += sizeof(rdp.cert.own_ip);
+    
     // Deserialize own_public_key
     std::memcpy(rdp.cert.own_public_key, buf.data() + offset, sizeof(rdp.cert.own_public_key));
     offset += sizeof(rdp.cert.own_public_key);
+    
     // Deserialize t
     std::memcpy(rdp.cert.time_stamp, buf.data() + offset, sizeof(rdp.cert.time_stamp));
     offset += sizeof(rdp.cert.time_stamp);
+
+
     // Deserialize expires
     std::memcpy(rdp.cert.expires, buf.data() + offset, sizeof(rdp.cert.expires));
     offset += sizeof(rdp.cert.expires);
+
+    //deserialize signature
+    std::memcpy(rdp.cert.signature.data(), buf.data(),rdp.cert.signature.size());
+    offset += rdp.cert.signature.size();  //ここsizeofでなくていいか要確認
     
     // Deserialize nonce
     std::memcpy(&rdp.nonce, buf.data() + offset, sizeof(rdp.nonce));
@@ -253,6 +249,8 @@ void deserialize(const std::vector<uint8_t>& buf, RDP_format& rdp) {
 
     // Deserialize signature
     std::memcpy(rdp.signature.data(), buf.data() + offset, rdp.signature.size());
+
+    return rdp;
 }
 
 // デシリアライズ処理(REP)
@@ -354,23 +352,36 @@ std::tuple<std::vector<uint8_t>, std::string> receving_process(int sock) {
 
     std::cout << "-----------------------------------receive data--------------------------------------" << std::endl;
 
-
-    //std::cout << "Received data size: " << recv_buf.size() << " bytes" << std::endl;
-    std::cout << std::dec << std::endl; // 10進数に戻す
-
-
     return {recv_buf, sender_ip};
 }
 
+//hex変換関数
+std::string hex_encode(std::array<unsigned char,256> signature) {
+    std::ostringstream oss;
+    for (size_t i = 0; i < signature.size(); ++i) {
+        oss << std::hex << static_cast<int>(signature[i]) << " ";
+    }
+    return oss.str();
+}
+//証明書を作成するための署名を生成するためのメッセージを作成
+std::string signed_message(const Certificate_Format& cert) {
+    std::ostringstream certStream;
+    certStream << cert.own_ip << "|\n"
+               << cert.own_public_key << "|\n"
+               << cert.time_stamp << "|\n"
+               << cert.expires << "|\n";
 
-
-
+    return certStream.str();
+}
+//署名含む証明書を文字列にする
 std::string certificate_to_string(const Certificate_Format& cert) {
     std::ostringstream certStream;
     certStream << cert.own_ip << "|\n"
                << cert.own_public_key << "|\n"
                << cert.time_stamp << "|\n"
                << cert.expires << "|\n";
+
+    certStream << hex_encode(cert.signature);
     return certStream.str();
 }
 
@@ -497,6 +508,13 @@ std::string construct_message(const RDP_format& deserialized_rdp) {
                   << certificate_to_string(deserialized_rdp.cert) << "|\n"
                   << deserialized_rdp.nonce << "|\n"
                   << deserialized_rdp.time_stamp << "|\n";
+
+    //出来上がったメッセージを出力
+    std::cout << "-------------------------Constructed message--------------------------- " << std::endl;
+    std::cout << messageStream.str() << std::endl;
+    std::cout << "-------------------------Constructed message--------------------------- " << std::endl;
+
+
     return messageStream.str();
 }
 
@@ -654,17 +672,11 @@ int main() {
     expiration_time[sizeof(expiration_time) - 1] = '\0'; // null-terminate
     //printf("expiration_time:%s\n", expiration_time);
 
-
     // 送信元の公開鍵を取得して証明書を作成
-    test_cert1 = Makes_Certificate(own_ip, own_public_key, formatted_Time, expiration_time);
+    test_cert1 = Makes_Certificate(own_ip, own_public_key, formatted_Time, expiration_time,{});
 
-    
-    strncpy(test_rdp1.time_stamp, formatted_Time, sizeof(test_rdp1.time_stamp) - 1);
-    test_rdp1.time_stamp[sizeof(test_rdp1.time_stamp) - 1] = '\0'; // null-terminate
-    //printf("rdp.time_stamp: %s\n", test_rdp1.time_stamp);
-    
     // 署名対象メッセージを作成
-    std::string message = construct_message(test_rdp1);
+    std::string message = signed_message(test_cert1);
     std::array<unsigned char,256> signature = {0};
     try {
         signature = size256_signMessage(private_key, message);
@@ -675,14 +687,35 @@ int main() {
         close(sock);
         return 1;
     }
-    
+
+    // 送信元の公開鍵を取得して証明書を作成
+    test_cert1 = Makes_Certificate(own_ip, own_public_key, formatted_Time, expiration_time,signature);
+
+    //証明書の中身を確認
+    Check_certificate(test_cert1);
+
     if (test_rdp1.signature.empty()) return -1;
 
     //乱数の生成
     std::uint32_t nonce = generateRandom32bit();
-    
+
+    //RDP用の署名を生成
+    //RDPの署名対象メッセージを作成
+    std::string message_certificate = certificate_to_string(test_cert1);
+    signature = {0};
+    try {
+        signature = size256_signMessage(private_key, message_certificate);
+    } catch (const std::exception& e) {
+        std::cerr << "Error signing message: " << e.what() << std::endl;
+        EVP_PKEY_free(private_key);
+        EVP_PKEY_free(public_key);
+        close(sock);
+        return 1;
+    }
+
     //RDPを作成
     test_rdp1 = Makes_RDP(MessageType::RDP,"10.0.0.4",test_cert1,nonce,formatted_Time,signature); //宛先は一旦手打ちで。
+    check_RDP(test_rdp1);
     
     std::vector<uint8_t> serialized_data;    // シリアライズ処理
     try {
