@@ -165,7 +165,7 @@ int unicast_send_process(std::vector<uint8_t> buf, std::string next_ip) {
     }
 }
 // シリアライズ処理(Forwarding_RDP_format)
-void serialize(const Forwarding_RDP_format& rdp, unsigned char* buf) {
+size_t serialize(const Forwarding_RDP_format& rdp, unsigned char* buf) {
     size_t offset = 0;
 
     //type
@@ -219,6 +219,7 @@ void serialize(const Forwarding_RDP_format& rdp, unsigned char* buf) {
     std::memcpy(buf + offset, rdp.receiver_signature.data(), rdp.receiver_signature.size());
     offset += rdp.receiver_signature.size();
 
+    return offset;
 }
 //RDP_formatのシリアライズ処理
 void serialize(const RDP_format& rdp, unsigned char* buf) {
@@ -508,6 +509,7 @@ std::string construct_message(const RDP_format& deserialized_rdp) {
                   << certificate_to_string(deserialized_rdp.cert) << "|\n"
                   << deserialized_rdp.nonce << "|\n"
                   << deserialized_rdp.time_stamp << "|\n";
+
     return messageStream.str();
 }
 
@@ -519,6 +521,17 @@ std::string construct_message(const Forwarding_RDP_format& deserialized_rdp) {
                   << certificate_to_string(deserialized_rdp.rdp.cert) << "|\n"
                   << deserialized_rdp.rdp.nonce << "|\n"
                   << deserialized_rdp.rdp.time_stamp << "|\n";
+
+    // 署名を16進数文字列に変換
+    for(size_t i = 0; i < deserialized_rdp.rdp.signature.size(); ++i) {
+        messageStream << std::hex << static_cast<int>(deserialized_rdp.rdp.signature[i]);
+    }
+    messageStream << "|\n";
+
+    //出来上がったメッセージを出力
+    std::cout << "-------------------------Constructed message--------------------------- " << std::endl;
+    std::cout << messageStream.str() << std::endl;
+    std::cout << "-------------------------Constructed message--------------------------- " << std::endl;
 
     return messageStream.str();
 }
@@ -1057,7 +1070,6 @@ int main() {
                     
                     // REPをシリアライズ
                     std::vector<uint8_t> rep_buf;
-                    //serialize(rep, rep_buf);
 
                     // REPを送信(宛先は一つ前の端末に向けて送信)
                     struct sockaddr_in rep_addr;
@@ -1087,9 +1099,10 @@ int main() {
     
                 //Forwarding_RDP_formatを作成
                 Forwarding_RDP_format forwarding_rdp = {};
+                forwarding_rdp.rdp = deserialized_rdp; // RDP_formatをコピー
 
                 // 署名を生成
-                std::string message = construct_message(deserialized_rdp);
+                std::string message = construct_message(forwarding_rdp.rdp);
                 std::array<unsigned char,256> forwarder_signature = size256_signMessage(private_key, message);
                 if (forwarder_signature.empty()) {
                     std::cerr << "Failed to sign the message" << std::endl;
@@ -1125,7 +1138,12 @@ int main() {
                 check_RDP(forwarding_rdp);
             
                 // Forwarding_RDP_format をシリアライズ
-                serialize(forwarding_rdp, send_buf.data());
+                size_t used = serialize(forwarding_rdp, send_buf.data());
+                send_buf.resize(used);
+                std::cout << "---------------------------------------------send_buf size--------------------------------------------" << std::endl;
+                std::cout << send_buf.size() << std::endl;
+                std::cout << "---------------------------------------------send_buf size--------------------------------------------" << std::endl;
+                
 
                 //RDPならブロードキャスト転送する。
                 broadcast_send_process(send_buf);
@@ -1181,8 +1199,6 @@ int main() {
                     Certificate_Format forwarder_certificate = Makes_Certificate(own_ip, own_public_key, formatted_Time, expiration_time);
                 
                     deserialized_rep.receiver_cert = forwarder_certificate;
-                    // Forwarding_REP_format をシリアライズ
-                    //serialize_forwarding_rep(deserialized_rep, send_buf);
                     //REPならユニキャスト転送する, next_ipは一つ前の端末のIPアドレスで設定する必要がある
                     unicast_send_process(send_buf, next_ip);
                 } else if(static_cast<int>(packet_type) == 3){

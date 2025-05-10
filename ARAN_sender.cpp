@@ -125,16 +125,12 @@ Forwarding_RDP_format Forwarding_RDP_makes(RDP_format RDP, std::array<unsigned c
     return rdp;
 }
 
-void serialize(const RDP_format& rdp, unsigned char* buf) {
+size_t serialize(const RDP_format& rdp, unsigned char* buf) {
     size_t offset = 0;
 
     //type
     buf[offset] = static_cast<uint8_t>(rdp.type);
     offset += sizeof(uint8_t);
-
-    // //source_ip
-    // std::memcpy(buf + offset, rdp.source_ip, sizeof(rdp.source_ip));
-    // offset += sizeof(rdp.source_ip);
 
     //dest_ip
     std::memcpy(buf + offset, rdp.dest_ip, sizeof(rdp.dest_ip));
@@ -168,6 +164,7 @@ void serialize(const RDP_format& rdp, unsigned char* buf) {
     std::memcpy(buf + offset, rdp.signature.data(), rdp.signature.size());
     offset += rdp.signature.size();
     
+    return offset;
 }
 
 // デシリアライズ処理(RDP)
@@ -649,8 +646,12 @@ int main() {
 
     // シリアライズ処理
     std::vector<uint8_t> buf(2048); //unsigned char buf[2048];はどこにアクセスするかわからないので、vectorに変更
-    serialize(test_rdp1, buf.data());
-    
+    size_t used = serialize(test_rdp1, buf.data());
+    buf.resize(used);
+    std::cout << "---------------------------------------------send_buf size--------------------------------------------" << std::endl;
+    std::cout << buf.size() << std::endl;
+    std::cout << "---------------------------------------------send_buf size--------------------------------------------" << std::endl;
+
     // データ送信
     if (send_process(buf)) {
         std::cout << "Message sent successfully" << std::endl;
