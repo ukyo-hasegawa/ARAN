@@ -19,6 +19,9 @@
 #include <list>
 #include <algorithm>
 
+#define EXCEPTION_RDP_SIZE 865
+#define EXCEPTION_FORWARDING_RDP_SIZE 1689
+
 enum class MessageType : uint8_t {
     RDP = 0x01,
     REP = 0x02,
@@ -178,11 +181,15 @@ std::vector<uint8_t> serialize(const Forwarding_RDP_format& rdp) {
         sizeof(rdp.rdp.nonce) +
         sizeof(rdp.rdp.time_stamp) +
         rdp.rdp.signature.size() +
+        rdp.receiver_signature.size() +
         sizeof(rdp.receiver_cert.own_ip) +
         sizeof(rdp.receiver_cert.own_public_key) +
         sizeof(rdp.receiver_cert.time_stamp) +
         sizeof(rdp.receiver_cert.expires) +
-        rdp.receiver_signature.size();
+        rdp.receiver_cert.signature.size();
+
+    std::vector<uint8_t> buf = serialize(rdp.rdp); // RDP_formatのシリアライズを呼び出す
+        
 
     std::vector<uint8_t> buf(total_size);  // 必要なサイズで確保
 
@@ -224,15 +231,23 @@ std::vector<uint8_t> serialize(const Forwarding_RDP_format& rdp) {
     //receiver_cert_own_ip
     std::memcpy(buf.data() + offset, rdp.receiver_cert.own_ip, sizeof(rdp.receiver_cert.own_ip));
     offset += sizeof(rdp.receiver_cert.own_ip);
+
     //receiver_cert_own_public_key
     std::memcpy(buf.data() + offset, rdp.receiver_cert.own_public_key, sizeof(rdp.receiver_cert.own_public_key));
     offset += sizeof(rdp.receiver_cert.own_public_key);
+
     //receiver_cert_timestamp
     std::memcpy(buf.data() + offset, rdp.receiver_cert.time_stamp, sizeof(rdp.receiver_cert.time_stamp));
     offset += sizeof(rdp.receiver_cert.time_stamp);
+
     //receiver_cert_expires
     std::memcpy(buf.data() + offset, rdp.receiver_cert.expires, sizeof(rdp.receiver_cert.expires));
     offset += sizeof(rdp.receiver_cert.expires);
+
+    //receiver_cert_signature
+    std::memcpy(buf.data() + offset, rdp.receiver_cert.signature.data(), rdp.receiver_cert.signature.size());
+    offset += rdp.receiver_cert.signature.size();
+
     //receiver_signature
     std::memcpy(buf.data() + offset, rdp.receiver_signature.data(), rdp.receiver_signature.size());
     offset += rdp.receiver_signature.size();
@@ -676,6 +691,7 @@ std::string calculateExpirationTime(int durationHours, const std::string& format
 
     return timeStream.str();
 }
+
 // Forwarding_RDP_formatを作成する関数
 Forwarding_RDP_format Makes_RDP(RDP_format RDP, std::array<unsigned char,256> receiver_signature, Certificate_Format receiver_cert) 
 {
@@ -976,31 +992,17 @@ std::string signed_message(const Certificate_Format& cert) {
 void check_RDP(const Forwarding_RDP_format& rdp) {
     //各要素の確認
     std::cout << "---------------------------Forwarding_RDP---------------------------" << std::endl;
-    std::cout << "rdp.rdp.type: " << static_cast<int>(rdp.rdp.type) << std::endl;
-    std::cout << "rdp.rdp.dest_ip: " << rdp.rdp.dest_ip << std::endl;
-
-    std::cout << "rdp.rdp.cert.own_ip: " << rdp.rdp.cert.own_ip << std::endl;
-    std::cout << "rdp.rdp.cert.own_public_key: " << rdp.rdp.cert.own_public_key << std::endl;
-    std::cout << "rdp.rdp.cert.time_stamp: " << rdp.rdp.cert.time_stamp << std::endl;
-    std::cout << "rdp.rdp.cert.expires: " << rdp.rdp.cert.expires << std::endl;
-    std::cout << "rdp.rdp.cert.signature" << std::endl;
-    for (size_t i =0; i< rdp.rdp.cert.signature.size(); i++){
-        std::cout << std::hex << static_cast<int>(rdp.rdp.cert.signature[i]) << " ";
-    }
-    std::cout << std::dec<<std::endl; // 10進数に戻す
-
-    std::cout << "rdp.rdp.nonce: " << rdp.rdp.nonce << std::endl;
-    std::cout << "rdp.rdp.time_stamp: " << rdp.rdp.time_stamp << std::endl;
-    std::cout << "rdp.rdp.signature" << std::endl;
-    for (size_t i =0; i< rdp.rdp.signature.size(); i++){
-        std::cout << std::hex << static_cast<int>(rdp.rdp.signature[i]) << " ";
-    }
-    std::cout << std::endl;
+    check_RDP(rdp.rdp); // RDP_formatの確認を呼び出す
 
     std::cout << "rdp.receiver_cert.own_ip: " << rdp.receiver_cert.own_ip << std::endl;
     std::cout << "rdp.receiver_cert.own_public_key: " << rdp.receiver_cert.own_public_key << std::endl;
     std::cout << "rdp.receiver_cert.time_stamp: " << rdp.receiver_cert.time_stamp << std::endl;
     std::cout << "rdp.receiver_cert.expires: " << rdp.receiver_cert.expires << std::endl;
+    std::cout << "rdp.receiver_cert.signature" << std::endl;
+    for (size_t i =0; i< rdp.receiver_cert.signature.size(); i++){
+        std::cout << std::hex << static_cast<int>(rdp.receiver_cert.signature[i]) << " ";
+    }
+    std::cout << std::dec<<std::endl; // 10進数に戻す
 
     std::cout << "rdp.receiver_signature: " << std::endl;
     for (size_t i =0; i< rdp.receiver_signature.size(); i++){
@@ -1073,6 +1075,12 @@ int main() {
             //std::cout.flush();
 
             if(static_cast<int>(packet_type) == 1) {
+                //サイズ検査を行う
+                if(recv_buf.size() < EXCEPTION_RDP_SIZE) {
+                    std::cerr << "Received RDP packet is too small" << std::endl;
+                    continue;
+                }
+                
                 RDP_format deserialized_rdp = {};
                 deserialized_rdp = deserialize(recv_buf);
 
@@ -1129,7 +1137,7 @@ int main() {
                     //自身の証明書を作成
                     //Certificate_Format own_certificate = Makes_Certificate(own_ip, own_public_key, formatted_Time, expiration_time, ); 
                     //署名サイズを出力
-                    std::cout << "Signature size:" << deserialized_rdp.signature.size() << std::endl;   
+                    //std::cout << "Signature size:" << deserialized_rdp.signature.size() << std::endl;   
 
                     std::cout << "-------------------------------------Destination sends REP-------------------------------------" << std::endl;
                     // //Forwarding_REP_format rep = Makes_REP(MessageType::REP, deserialized_rdp.cert.own_ip, own_certificate, deserialized_rdp.nonce, deserialized_rdp.time_stamp, deserialized_rdp.signature , {}, {});
@@ -1174,21 +1182,24 @@ int main() {
                     close(rep_sock);
 
                 } else {
-                //自分宛でないことを確認
+                //自分宛でないことを確認→forwarding rdpを作成
                 std::cout << "This message is not for me. Forwarding..." << std::endl;
     
                 //Forwarding_RDP_formatを作成
                 Forwarding_RDP_format forwarding_rdp = {};
                 forwarding_rdp.rdp = deserialized_rdp; // RDP_formatをコピー
 
-                // 署名を生成
+                check_RDP(forwarding_rdp.rdp);
+
+                // RDPに対する署名を生成
                 std::string message = construct_message(forwarding_rdp.rdp);
                 std::array<unsigned char,256> forwarder_signature = size256_signMessage(private_key, message);
                 if (forwarder_signature.empty()) {
                     std::cerr << "Failed to sign the message" << std::endl;
                     return 1;
                 }
-                //std::cout << "forwarder_signature size:" << forwarder_signature.size() << std::endl;
+                // std::cout << "forwarder_signature size:" << forwarder_signature.size() << std::endl;
+                // std::cout << "forwarder_signature size:" <<sizeof(forwarder_signature) << std::endl;
 
                 // 転送端末の証明書を作成
 
@@ -1211,8 +1222,21 @@ int main() {
                 std::strncpy(expiration_time, expirationTime.data(), sizeof(expiration_time) - 1);
 
                         
-                // 転送端末の証明書を作成
-                Certificate_Format forwarder_certificate = Makes_Certificate(own_ip, own_public_key, formatted_Time, expiration_time,forwarder_signature);
+                // 転送端末の証明書(署名なし)を作成
+                Certificate_Format forwarder_certificate = Makes_Certificate(own_ip, own_public_key, formatted_Time, expiration_time,{});
+
+                // 転送端末の証明書に対する署名を生成
+                std::string message_certificate = signed_message(forwarder_certificate);
+                std::array<unsigned char,256> forwarder_signature_certificate = size256_signMessage(private_key, message_certificate);
+                if (forwarder_signature_certificate.empty()) {
+                    std::cerr << "Failed to sign the message" << std::endl;
+                    return 1;
+                }
+                // std::cout << "forwarder_signature_certificate size:" << forwarder_signature_certificate.size() << std::endl;
+                // std::cout << "forwarder_signature_certificate size:" <<sizeof(forwarder_signature_certificate) << std::endl;
+
+                //署名付き　証明書を作成
+                forwarder_certificate = Makes_Certificate(own_ip, own_public_key, formatted_Time, expiration_time, forwarder_signature_certificate);
 
                 // Forwarding_RDP_formatを作成
                 forwarding_rdp = Makes_RDP(deserialized_rdp, forwarder_signature, forwarder_certificate);
@@ -1283,6 +1307,11 @@ int main() {
                     //REPならユニキャスト転送する, next_ipは一つ前の端末のIPアドレスで設定する必要がある
                     unicast_send_process(send_buf, next_ip);
                 } else if(static_cast<int>(packet_type) == 3){
+                    //サイズ検査を行う
+                    if(recv_buf.size() < EXCEPTION_FORWARDING_RDP_SIZE) {
+                        std::cerr << "Received Forwarding_RDP packet is too small" << std::endl;
+                        continue;
+                    }
                     
                     //forwarding RDPの処理を行っていく。
                     // Forwarding_RDP_formatのデシリアライズ
@@ -1347,8 +1376,10 @@ int main() {
                         std::cerr << "Failed to sign the message" << std::endl;
                         return 1;
                     }
-
+                    
+                    //証明書の作成
                     forwarder_certificate = Makes_Certificate(own_ip, own_public_key, formatted_Time, expiration_time, signature);
+                    Check_certificate(forwarder_certificate);
                     
                     // 署名を生成
                     message = certificate_to_string(forwarder_certificate);
