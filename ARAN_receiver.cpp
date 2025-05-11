@@ -169,29 +169,35 @@ int unicast_send_process(std::vector<uint8_t> buf, std::string next_ip) {
     }
 }
 // シリアライズ処理(Forwarding_RDP_format)
-std::vector<uint8_t> serialize(const Forwarding_RDP_format& rdp) {
+std::vector<uint8_t> serialize(const Forwarding_RDP_format rdp) {
     size_t offset = 0;
-    size_t total_size = sizeof(uint8_t) + // type
-        sizeof(rdp.rdp.dest_ip) +
-        sizeof(rdp.rdp.cert.own_ip) +
-        sizeof(rdp.rdp.cert.own_public_key) +
-        sizeof(rdp.rdp.cert.time_stamp) +
-        sizeof(rdp.rdp.cert.expires) +
-        rdp.rdp.cert.signature.size() + 
-        sizeof(rdp.rdp.nonce) +
-        sizeof(rdp.rdp.time_stamp) +
-        rdp.rdp.signature.size() +
-        rdp.receiver_signature.size() +
-        sizeof(rdp.receiver_cert.own_ip) +
-        sizeof(rdp.receiver_cert.own_public_key) +
-        sizeof(rdp.receiver_cert.time_stamp) +
-        sizeof(rdp.receiver_cert.expires) +
-        rdp.receiver_cert.signature.size();
+    // size_t total_size = sizeof(uint8_t) + // type
+    //     sizeof(rdp.rdp.dest_ip) +
+    //     sizeof(rdp.rdp.cert.own_ip) +
+    //     sizeof(rdp.rdp.cert.own_public_key) +
+    //     sizeof(rdp.rdp.cert.time_stamp) +
+    //     sizeof(rdp.rdp.cert.expires) +
+    //     rdp.rdp.cert.signature.size() +  //証明書(署名抜き)に対する署名
+    //     sizeof(rdp.rdp.nonce) +
+    //     sizeof(rdp.rdp.time_stamp) +
+    //     rdp.rdp.signature.size() + //RDP全体に対する署名
+    //     sizeof(rdp.receiver_cert.own_ip) +
+    //     sizeof(rdp.receiver_cert.own_public_key) +
+    //     sizeof(rdp.receiver_cert.time_stamp) +
+    //     sizeof(rdp.receiver_cert.expires) +
+    //     rdp.receiver_cert.signature.size() + //受信者の証明書(署名抜き)に対する署名
+    //     rdp.receiver_signature.size(); //受信者の署名
 
-    std::vector<uint8_t> buf = serialize(rdp.rdp); // RDP_formatのシリアライズを呼び出す
-        
+    size_t total_size = 1 +  // type
+    16 + // dest_ip
+    16 + 256 + 20 + 20 + 256 + // cert
+    4 + 20 + 256 + // nonce, timestamp, signature
+    16 + 256 + 20 + 20 + 256 + // receiver_cert
+    256; // receiver_signature    
 
     std::vector<uint8_t> buf(total_size);  // 必要なサイズで確保
+
+    std::cout << "total_size: " << total_size << std::endl;
 
     //type
     buf[offset] = static_cast<uint8_t>(rdp.rdp.type);
@@ -215,6 +221,10 @@ std::vector<uint8_t> serialize(const Forwarding_RDP_format& rdp) {
     //cert_expires
     std::memcpy(buf.data() + offset, rdp.rdp.cert.expires, sizeof(rdp.rdp.cert.expires));
     offset += sizeof(rdp.rdp.cert.expires);
+
+    //cert_signature
+    std::memcpy(buf.data() + offset, rdp.rdp.cert.signature.data(), rdp.rdp.cert.signature.size());
+    offset += rdp.rdp.cert.signature.size();
 
     //nonce
     std::memcpy(buf.data() + offset, &rdp.rdp.nonce, sizeof(rdp.rdp.nonce));
@@ -252,6 +262,13 @@ std::vector<uint8_t> serialize(const Forwarding_RDP_format& rdp) {
     std::memcpy(buf.data() + offset, rdp.receiver_signature.data(), rdp.receiver_signature.size());
     offset += rdp.receiver_signature.size();
 
+    // 最終チェック（安全のため）
+    if (offset != total_size) {
+        throw std::runtime_error("Serialize error: size mismatch");
+    }
+
+    std::cout << "Serialized data size: " << buf.size() << std::endl;
+
     return buf;
 }
 
@@ -268,6 +285,8 @@ std::vector<uint8_t> serialize(const RDP_format rdp) {
         sizeof(rdp.nonce) +
         sizeof(rdp.time_stamp) +
         rdp.signature.size();
+
+    std::cout << "total_size: " << total_size << std::endl;
 
     std::vector<uint8_t> buf(total_size);  // 必要なサイズで確保
     size_t offset = 0;

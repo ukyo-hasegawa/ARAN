@@ -24,7 +24,7 @@ enum class MessageType : uint8_t {
     REP = 0x02
 };
 
-struct Certificate_Format {
+struct Certificate_Format { //合計568byte
     char own_ip[16]; //16byteのIPアドレス
     char own_public_key[256]; //256byteの公開鍵 ここはunsigned charにするか要検討
     char time_stamp[20]; //20byteのタイムスタンプ
@@ -32,19 +32,19 @@ struct Certificate_Format {
     std::array<unsigned char,256> signature; //256byteの署名
 };
 
-struct RDP_format {
+struct RDP_format { //合計865byte
     MessageType type; //1バイト
     char dest_ip[16];
-    Certificate_Format cert;
+    Certificate_Format cert; //合計568byte
     std::uint32_t nonce; //4バイト
     char time_stamp[20];
     std::array<unsigned char, 256> signature;
 };
 
-struct Forwarding_RDP_format {
-    RDP_format rdp;
-    std::array<unsigned char,256> receiver_signature;
-    Certificate_Format receiver_cert;
+struct Forwarding_RDP_format { //1689byte
+    RDP_format rdp; //合計865byte
+    std::array<unsigned char,256> receiver_signature; //256byteの受信者署名
+    Certificate_Format receiver_cert; //合計568byte
 };
 
 struct Forwarding_REP_format {
@@ -162,6 +162,9 @@ std::vector<uint8_t> serialize(const RDP_format rdp) {
         sizeof(rdp.nonce) +
         sizeof(rdp.time_stamp) +
         rdp.signature.size();
+
+    
+    std::cout << "total_size: " << total_size << std::endl;
 
     std::vector<uint8_t> buf(total_size);  // 必要なサイズで確保
     size_t offset = 0;
