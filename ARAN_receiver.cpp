@@ -188,11 +188,18 @@ std::vector<uint8_t> serialize(const Forwarding_RDP_format rdp) {
     //     rdp.receiver_cert.signature.size() + //受信者の証明書(署名抜き)に対する署名
     //     rdp.receiver_signature.size(); //受信者の署名
 
-    size_t total_size = EXCEPTION_FORWARDING_RDP_SIZE;    
+    size_t total_size = EXCEPTION_FORWARDING_RDP_SIZE; 
+    std::cout << "total_size: " << total_size << std::endl;
+    int i = EXCEPTION_FORWARDING_RDP_SIZE;   
+    int test = 1689;
+    std::cout << "test: " << test << std::endl;
+    std::cout << "EXEPTION_FORWARDING_RDP_SIZE: " << EXCEPTION_FORWARDING_RDP_SIZE << std::endl;
 
     std::vector<uint8_t> buf(total_size);  // 必要なサイズで確保
 
     std::cout << "total_size: " << total_size << std::endl;
+    std::cout << "buf.size(): " << buf.size() << std::endl;
+    std::cout << "i:" << i << std::endl;
 
     //type
     buf[offset] = static_cast<uint8_t>(rdp.rdp.type);
