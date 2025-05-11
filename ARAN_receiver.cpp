@@ -188,12 +188,7 @@ std::vector<uint8_t> serialize(const Forwarding_RDP_format rdp) {
     //     rdp.receiver_cert.signature.size() + //受信者の証明書(署名抜き)に対する署名
     //     rdp.receiver_signature.size(); //受信者の署名
 
-    size_t total_size = 1 +  // type
-    16 + // dest_ip
-    16 + 256 + 20 + 20 + 256 + // cert
-    4 + 20 + 256 + // nonce, timestamp, signature
-    16 + 256 + 20 + 20 + 256 + // receiver_cert
-    256; // receiver_signature    
+    size_t total_size = EXCEPTION_FORWARDING_RDP_SIZE;    
 
     std::vector<uint8_t> buf(total_size);  // 必要なサイズで確保
 
