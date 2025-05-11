@@ -1023,8 +1023,6 @@ void check_RDP(const Forwarding_RDP_format rdp) {
 }
 
 int main() {
-    std::cout << "EXCEPTION_RDP_SIZE: " << EXCEPTION_RDP_SIZE << std::endl;
-    std::cout << "EXCEPTION_FORWARDING_RDP_SIZE: " << EXCEPTION_FORWARDING_RDP_SIZE << std::endl;
     // ブロードキャスト受信の設定
     int sock;
     struct sockaddr_in addr;
@@ -1361,6 +1359,79 @@ int main() {
                          std::cout << "Signature verification succeeded!" << std::endl;
                     }
 
+                    //宛先確認
+                    if (deserialized_rdp.rdp.dest_ip == own_ip_address) {
+                        std::cout << "This message is for me." << std::endl;
+                        // REPの作成
+                        //自身の証明書を作成
+                        // 転送端末の証明書を作成
+                        // 現在時刻の取得
+                        std::string Formatted_Time = get_time();
+                        // 有効期限の取得
+                        std::string expirationTime = calculateExpirationTime(24, Formatted_Time);
+                        char own_ip[16] = {};
+                        std::strncpy(own_ip, get_own_ip().c_str(), sizeof(own_ip) - 1);
+                        char own_public_key[256] = {};
+                        std::strncpy(own_public_key, get_PublicKey_As_String(public_key).c_str(), sizeof(own_public_key) - 1);
+                        char formatted_Time[20] = {};
+                        std::strncpy(formatted_Time, Formatted_Time.data(), sizeof(formatted_Time) - 1);
+                        char expiration_time[20] = {};
+                        std::strncpy(expiration_time, expirationTime.data(), sizeof(expiration_time) - 1);
+                        // 転送端末の証明書(署名抜き)を作成
+                        
+                        Certificate_Format own_certificate = Makes_Certificate(own_ip, own_public_key, formatted_Time, expiration_time, {}); 
+                        //証明書に対する署名を生成
+                        
+                        message = signed_message(own_certificate);
+                        std::array<unsigned char,256> cert_signature = size256_signMessage(private_key, message);
+                        if (cert_signature.empty()) {
+                            std::cerr << "Failed to sign the message" << std::endl;
+                            return 1;
+                        }
+
+                        //証明書(署名あり)の作成
+                        own_certificate = Makes_Certificate(own_ip, own_public_key, formatted_Time, expiration_time, cert_signature);
+                        //Check_certificate(own_certificate);
+
+                        //宛先IPアドレスを取得(RDPより取得)
+
+                        //REPの生成[REP,宛先IP,証明書,ノンス,タイムスタンプ,署名]
+                        Forwarding_REP_format rep = Makes_REP(MessageType::REP, deserialized_rdp.rdp.cert.own_ip, own_certificate, deserialized_rdp.rdp.nonce, deserialized_rdp.rdp.time_stamp, deserialized_rdp.rdp.signature , {}, {});
+
+                        
+                        //署名サイズを出力
+                        //std::cout << "Signature size:" << deserialized_rdp.signature.size() << std::endl;   
+
+                        std::cout << "-------------------------------------Destination sends REP-------------------------------------" << std::endl;
+                        //Forwarding_REP_format rep = Makes_REP(MessageType::REP, deserialized_rdp.cert.own_ip, own_certificate, deserialized_rdp.nonce, deserialized_rdp.time_stamp, deserialized_rdp.signature , {}, {});
+                        
+                        // REPをシリアライズ
+                        std::vector<uint8_t> rep_buf;
+
+                        // REPを送信(宛先は一つ前の端末に向けて送信)
+                        struct sockaddr_in rep_addr;
+                        rep_addr.sin_family = AF_INET;
+                        rep_addr.sin_port = htons(12345);
+                        std::cout << "Send REP to : " << sender_ip_raw<< std::endl;
+                        std::cout << "Send REP size:" << rep_buf.size() << std::endl; 
+                        rep_addr.sin_addr.s_addr = inet_addr(sender_ip_raw.c_str());
+
+                        int rep_sock = socket(AF_INET, SOCK_DGRAM, 0);
+                        if (rep_sock < 0) {
+                            std::cerr << "Failed to create socket for REP" << std::endl;
+                        }
+                        std::cout << "Next ip:" << sender_ip_raw << std::endl;
+                        if (sendto(rep_sock, rep_buf.data(), rep_buf.size(), 0, reinterpret_cast<struct sockaddr*>(&rep_addr), sizeof(rep_addr)) < 0) {
+                            perror("sendto failed for REP");
+                        } else {
+                            std::cout << "---------------------------REP sent successfully to " << sender_ip_raw <<"------------------------------" << std::endl;
+
+                        }
+
+                        close(rep_sock);
+
+                    } else {
+
                     //付与されている署名の除去(0バイトの配列にする)
                     std::cout <<"--------------------------remove receiver_signature-------------------------" << std::endl;
                     std::memset(deserialized_rdp.receiver_signature.data(), 0, sizeof(deserialized_rdp.receiver_signature));
@@ -1416,6 +1487,7 @@ int main() {
 
                     //RDPならブロードキャスト転送する。
                     broadcast_send_process(send_buf);
+                    }
                     
                 } else {
                     std::cerr << "Unknown packet type" << std::endl;
