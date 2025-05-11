@@ -171,22 +171,6 @@ int unicast_send_process(std::vector<uint8_t> buf, std::string next_ip) {
 // シリアライズ処理(Forwarding_RDP_format)
 std::vector<uint8_t> serialize(const Forwarding_RDP_format rdp) {
     size_t offset = 0;
-    // size_t total_size = sizeof(uint8_t) + // type
-    //     sizeof(rdp.rdp.dest_ip) +
-    //     sizeof(rdp.rdp.cert.own_ip) +
-    //     sizeof(rdp.rdp.cert.own_public_key) +
-    //     sizeof(rdp.rdp.cert.time_stamp) +
-    //     sizeof(rdp.rdp.cert.expires) +
-    //     rdp.rdp.cert.signature.size() +  //証明書(署名抜き)に対する署名
-    //     sizeof(rdp.rdp.nonce) +
-    //     sizeof(rdp.rdp.time_stamp) +
-    //     rdp.rdp.signature.size() + //RDP全体に対する署名
-    //     sizeof(rdp.receiver_cert.own_ip) +
-    //     sizeof(rdp.receiver_cert.own_public_key) +
-    //     sizeof(rdp.receiver_cert.time_stamp) +
-    //     sizeof(rdp.receiver_cert.expires) +
-    //     rdp.receiver_cert.signature.size() + //受信者の証明書(署名抜き)に対する署名
-    //     rdp.receiver_signature.size(); //受信者の署名
 
     size_t total_size = EXCEPTION_FORWARDING_RDP_SIZE; 
     std::cout << "total_size: " << total_size << std::endl;
@@ -1034,6 +1018,8 @@ void check_RDP(const Forwarding_RDP_format& rdp) {
 }
 
 int main() {
+    std::cout << "EXCEPTION_RDP_SIZE: " << EXCEPTION_RDP_SIZE << std::endl;
+    std::cout << "EXCEPTION_FORWARDING_RDP_SIZE: " << EXCEPTION_FORWARDING_RDP_SIZE << std::endl;
     // ブロードキャスト受信の設定
     int sock;
     struct sockaddr_in addr;
