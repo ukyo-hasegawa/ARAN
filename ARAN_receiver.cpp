@@ -109,7 +109,7 @@ std::string get_prev_ip(const std::string& source_ip, uint32_t nonce) {
             return std::string(entry.prev_ip);
         }
     }
-    return "";
+    return "Not found ip_address";
 }
 
 MessageType get_packet_type(const std::vector<uint8_t>& buf) {
@@ -294,7 +294,7 @@ std::vector<uint8_t> serialize(const RDP_format rdp) {
         sizeof(rdp.cert.own_public_key) +
         sizeof(rdp.cert.time_stamp) +
         sizeof(rdp.cert.expires) +
-        sizeof(rdp.cert.signature) + 
+        rdp.cert.signature.size() + 
         sizeof(rdp.nonce) +
         sizeof(rdp.time_stamp) +
         rdp.signature.size();
@@ -336,7 +336,7 @@ std::vector<uint8_t> serialize(const RDP_format rdp) {
     
     // 最終チェック（安全のため）
     if (offset != total_size) {
-        throw std::runtime_error("Serialize_error: size mismatch");
+        throw std::runtime_error("Serialize_error:RDP size mismatch");
     }
 
     return buf;
@@ -356,6 +356,8 @@ std::vector<uint8_t> serialize(const REP_format rep) {
         rep.signature.size();
 
     std::vector<uint8_t> buf(total_size);  // 必要なサイズで確保
+    //std::vector<uint8_t> buf(865);  // 必要なサイズで確保
+    
     size_t offset = 0;
 
     //typeのシリアライズ
@@ -382,6 +384,10 @@ std::vector<uint8_t> serialize(const REP_format rep) {
     std::memcpy(buf.data() + offset, rep.cert.expires, sizeof(rep.cert.expires));
     offset += sizeof(rep.cert.expires);
 
+    //cert_signatureのシリアライズ
+    std::memcpy(buf.data()+offset, rep.cert.signature.data(), rep.cert.signature.size());
+    offset += rep.cert.signature.size();
+
     //nonceのシリアライズ
     std::memcpy(buf.data() + offset, &rep.nonce, sizeof(rep.nonce));
     offset += sizeof(rep.nonce);
@@ -393,6 +399,9 @@ std::vector<uint8_t> serialize(const REP_format rep) {
     //signatureのシリアライズ
     std::memcpy(buf.data() + offset, rep.signature.data(), rep.signature.size());
     offset += rep.signature.size();
+
+    // std::cout << "offset:" << offset << std::endl;
+    // std::cout << "total_size" << total_size << std::endl;
 
     // 最終チェック（安全のため）
     if (offset != total_size) {
@@ -824,14 +833,7 @@ void Check_REP(REP_format REP) {
     // ここでREPの中身の確認
     std::cout << "---------------------------Check_REP---------------------------" << std::endl;
     std::cout << "REP.dest_ip: " << REP.dest_ip << std::endl;
-    std::cout << "REP.nonce: " << REP.nonce << std::endl;
-    std::cout << "REP.time_stamp: " << REP.time_stamp << std::endl;
-    std::cout << "REP.signature " << std::endl;
-    for (size_t i = 0; i < REP.signature.size(); ++i) {
-        std::cout << std::hex << static_cast<int>(REP.signature[i]) << " ";
-    }
-    std::cout << std::dec << std::endl; // 10進数に戻す
-
+    
     std::cout << "REP.cert.own_ip: " << REP.cert.own_ip << std::endl;
     std::cout << "REP.cert.own_public_key: " << REP.cert.own_public_key << std::endl;
     std::cout << "REP.cert.time_stamp: " << REP.cert.time_stamp << std::endl;
@@ -841,6 +843,15 @@ void Check_REP(REP_format REP) {
         std::cout << std::hex << static_cast<int>(REP.cert.signature[i]) << " ";
     }
     std::cout << std::dec << std::endl; // 10進数に戻す
+
+    std::cout << "REP.nonce: " << REP.nonce << std::endl;
+    std::cout << "REP.time_stamp: " << REP.time_stamp << std::endl;
+    std::cout << "REP.signature " << std::endl;
+    for (size_t i = 0; i < REP.signature.size(); ++i) {
+        std::cout << std::hex << static_cast<int>(REP.signature[i]) << " ";
+    }
+    std::cout << std::dec << std::endl; // 10進数に戻す
+
     std::cout << "---------------------------Check_REP---------------------------" << std::endl;
 }
 
@@ -1202,8 +1213,6 @@ int main() {
                     continue; // 重複している場合は無視
                 } else {
                     std::cout << "New message detected. Adding to list..." << std::endl;
-                    received_info_set.push_back(new_info_set); // 新しいメッセージをリストに追加
-                    reverse_path_list.push_back(ReversePath(deserialized_rdp.cert.own_ip,deserialized_rdp.nonce,sender_ip));
                 }
 
                 check_RDP(deserialized_rdp);
@@ -1219,6 +1228,11 @@ int main() {
                 } else {
                      std::cout << "Signature verification succeeded!" << std::endl;
                 }
+
+                // 新しいメッセージをリストに追加
+                received_info_set.push_back(new_info_set); 
+                //逆経路を追加
+                reverse_path_list.push_back(ReversePath(deserialized_rdp.cert.own_ip,deserialized_rdp.nonce,sender_ip));
             
                 // 宛先確認
                 if (deserialized_rdp.dest_ip == own_ip_address) {
@@ -1421,6 +1435,10 @@ int main() {
                          std::cout << "Signature verification succeeded!" << std::endl;
                     }
 
+                    //逆経路を追加
+                    reverse_path_list.push_back(ReversePath(deserialized_rdp.rdp.cert.own_ip,deserialized_rdp.rdp.nonce,sender_ip));
+            
+
                     //宛先確認
                     if (deserialized_rdp.rdp.dest_ip == own_ip_address) {
                         std::cout << "This message is for me." << std::endl;
@@ -1464,7 +1482,7 @@ int main() {
                         rep_buf = serialize(rep);
 
                         //reverse_path_Listからひとつ前の端末のIPアドレスを取得
-                        next_ip = get_prev_ip(deserialized_rdp.rdp.dest_ip,deserialized_rdp.rdp.nonce);
+                        next_ip = get_prev_ip(deserialized_rdp.rdp.cert.own_ip,deserialized_rdp.rdp.nonce);
 
                         std::cout << "--------------------------REP send to:" << next_ip << "--------------------------------------" << std::endl;
 
