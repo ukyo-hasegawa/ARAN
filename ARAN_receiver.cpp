@@ -75,6 +75,24 @@ struct InfoSet {
     char time_stamp[20];
 };
 
+//reverth path用の構造体
+struct ReversePath {
+    char source_ip[16];
+    uint32_t nonce;
+    char prev_ip[16];
+
+    //コンストラクタを定義
+    ReversePath(const char* src, uint32_t n, const char* prev) {
+        std::strncpy(source_ip,src,15);
+        source_ip[15] = '\0';
+        nonce = n;
+        std::strncpy(prev_ip,prev,15);
+        prev_ip[15] = '\0';
+    }
+};  
+
+std::vector<ReversePath> reverse_path_list; // 逆経路リスト
+
 // 重複確認用関数
 bool isDuplicate(const std::list<InfoSet>& infoList, const InfoSet& newInfo) {
     for (const InfoSet& info : infoList) {
@@ -83,6 +101,15 @@ bool isDuplicate(const std::list<InfoSet>& infoList, const InfoSet& newInfo) {
         }
     }
     return false; // 重複していない
+}
+
+std::string get_prev_ip(const std::string& source_ip, uint32_t nonce) {
+    for (const auto& entry : reverse_path_list) {
+        if (std::strcmp(entry.source_ip, source_ip.c_str()) == 0 && entry.nonce == nonce) {
+            return std::string(entry.prev_ip);
+        }
+    }
+    return "";
 }
 
 MessageType get_packet_type(const std::vector<uint8_t>& buf) {
@@ -242,29 +269,24 @@ std::vector<uint8_t> serialize(const Forwarding_RDP_format rdp) {
     std::memcpy(buf.data() + offset, rdp.receiver_signature.data(), rdp.receiver_signature.size());
     offset += rdp.receiver_signature.size();
 
-
-    std::cout << "-------------------------Serialized data size:---------------------------- " <<std::endl;
-    std::cout << buf.size() << std::endl;
-    std::cout << "-------------------------Serialized data size:---------------------------- " <<std::endl;
-
     // 最終チェック（安全のため）
     if (offset != 1689) {
-        throw std::runtime_error("Serialize error: size mismatch");
+        throw std::runtime_error("Serialize_error:Forwarding RDP size mismatch");
     }
 
     if (offset != buf.size()) {
-        throw std::runtime_error("Serialize error: size mismatch");
+        throw std::runtime_error("Serialize_error:Forwarding RDP size mismatch");
     }
 
     if (1689 != buf.size()) {
-        throw std::runtime_error("Serialize error: size mismatch");
+        throw std::runtime_error("Serialize_error:Forwarding RDP size mismatch");
     }
 
     return buf;
 }
 
 
-//シリアライズ、bufを動的に確保するバージョン。こちらも検討
+//RDP_formatのシリアライズ、bufを動的に確保するバージョン。こちらも検討
 std::vector<uint8_t> serialize(const RDP_format rdp) {
     size_t total_size = sizeof(uint8_t) + // type
         sizeof(rdp.dest_ip) +
@@ -314,7 +336,67 @@ std::vector<uint8_t> serialize(const RDP_format rdp) {
     
     // 最終チェック（安全のため）
     if (offset != total_size) {
-        throw std::runtime_error("Serialize error: size mismatch");
+        throw std::runtime_error("Serialize_error: size mismatch");
+    }
+
+    return buf;
+}
+
+//REP_formatのシリアライズ、bufを動的に確保するバージョン。
+std::vector<uint8_t> serialize(const REP_format rep) {
+    size_t total_size = sizeof(uint8_t) +
+        sizeof(rep.dest_ip) +
+        sizeof(rep.cert.own_ip) +
+        sizeof(rep.cert.own_public_key) +
+        sizeof(rep.cert.time_stamp) +
+        sizeof(rep.cert.expires) +
+        sizeof(rep.cert.signature) + 
+        sizeof(rep.nonce) +
+        sizeof(rep.time_stamp) +
+        rep.signature.size();
+
+    std::vector<uint8_t> buf(total_size);  // 必要なサイズで確保
+    size_t offset = 0;
+
+    //typeのシリアライズ
+    buf[offset] = static_cast<uint8_t>(rep.type);
+    offset += sizeof(rep.type);
+
+    //dest_ipのシリアライズ
+    std::memcpy(buf.data() + offset, rep.dest_ip, sizeof(rep.dest_ip));
+    offset += sizeof(rep.dest_ip);
+
+    //cert_own_ipのシリアライズ
+    std::memcpy(buf.data() + offset, rep.cert.own_ip, sizeof(rep.cert.own_ip));
+    offset += sizeof(rep.cert.own_ip);
+
+    //cert_own_public_keyのシリアライズ
+    std::memcpy(buf.data() + offset, rep.cert.own_public_key, sizeof(rep.cert.own_public_key));
+    offset += sizeof(rep.cert.own_public_key);
+
+    //cert_timestampのシリアライズ
+    std::memcpy(buf.data() + offset, rep.cert.time_stamp, sizeof(rep.cert.time_stamp));
+    offset += sizeof(rep.cert.time_stamp);
+
+    //cert_expiresのシリアライズ
+    std::memcpy(buf.data() + offset, rep.cert.expires, sizeof(rep.cert.expires));
+    offset += sizeof(rep.cert.expires);
+
+    //nonceのシリアライズ
+    std::memcpy(buf.data() + offset, &rep.nonce, sizeof(rep.nonce));
+    offset += sizeof(rep.nonce);
+
+    //time_stampのシリアライズ
+    std::memcpy(buf.data() + offset, rep.time_stamp, sizeof(rep.time_stamp));
+    offset += sizeof(rep.time_stamp);
+
+    //signatureのシリアライズ
+    std::memcpy(buf.data() + offset, rep.signature.data(), rep.signature.size());
+    offset += rep.signature.size();
+
+    // 最終チェック（安全のため）
+    if (offset != total_size) {
+        throw std::runtime_error("Serialize_error:REP size mismatch");
     }
 
     return buf;
@@ -1046,8 +1128,6 @@ int main() {
     std::string dest_ip = "";
     std::string next_ip = "";
     std::vector<uint8_t> send_buf(2048);
-    //逆経路を管理
-    std::list<std::pair<std::string, uint32_t>> reverse_path_List;
 
 
     // タイムスタンプ,ノンスと受信ノードのIPアドレスを管理するリスト
@@ -1079,6 +1159,10 @@ int main() {
         // 受信処理
         std::tie(recv_buf, sender_ip_raw) = receving_process(sock);
         //std::cout << "sender_ip: " << sender_ip_raw << std::endl;
+
+        //sender_ip_rawをchar[16]に格納
+        char sender_ip[16] = {};
+        std::strncpy(sender_ip, sender_ip_raw.c_str(), sizeof(sender_ip) - 1);
         
         // 公開鍵の取得
         EVP_PKEY* public_key = load_public_key("public_key.pem");
@@ -1119,7 +1203,7 @@ int main() {
                 } else {
                     std::cout << "New message detected. Adding to list..." << std::endl;
                     received_info_set.push_back(new_info_set); // 新しいメッセージをリストに追加
-                    reverse_path_List.emplace_back(sender_ip_raw,deserialized_rdp.nonce);
+                    reverse_path_list.push_back(ReversePath(deserialized_rdp.cert.own_ip,deserialized_rdp.nonce,sender_ip));
                 }
 
                 check_RDP(deserialized_rdp);
@@ -1140,23 +1224,23 @@ int main() {
                 if (deserialized_rdp.dest_ip == own_ip_address) {
                     std::cout << "This message is for me." << std::endl;
 
-                    // 現在時刻の取得
-                    std::string Formatted_Time = get_time();
+                    // // 現在時刻の取得
+                    // std::string Formatted_Time = get_time();
                     
-                    // 有効期限の取得
-                    std::string expirationTime = calculateExpirationTime(24, Formatted_Time);
+                    // // 有効期限の取得
+                    // std::string expirationTime = calculateExpirationTime(24, Formatted_Time);
 
-                    char own_ip[16] = {};
-                    std::strncpy(own_ip, get_own_ip().c_str(), sizeof(own_ip) - 1);
+                    // char own_ip[16] = {};
+                    // std::strncpy(own_ip, get_own_ip().c_str(), sizeof(own_ip) - 1);
 
-                    char own_public_key[256] = {};
-                    std::strncpy(own_public_key, get_PublicKey_As_String(public_key).c_str(), sizeof(own_public_key) - 1);
+                    // char own_public_key[256] = {};
+                    // std::strncpy(own_public_key, get_PublicKey_As_String(public_key).c_str(), sizeof(own_public_key) - 1);
 
-                    char formatted_Time[20] = {};
-                    std::strncpy(formatted_Time, Formatted_Time.data(), sizeof(formatted_Time) - 1);
+                    // char formatted_Time[20] = {};
+                    // std::strncpy(formatted_Time, Formatted_Time.data(), sizeof(formatted_Time) - 1);
 
-                    char expiration_time[20] = {};
-                    std::strncpy(expiration_time, expirationTime.data(), sizeof(expiration_time) - 1);
+                    // char expiration_time[20] = {};
+                    // std::strncpy(expiration_time, expirationTime.data(), sizeof(expiration_time) - 1);
                     
                     //REPの作成
                     //自身の証明書を作成
@@ -1167,30 +1251,30 @@ int main() {
                     std::cout << "-------------------------------------Destination sends REP-------------------------------------" << std::endl;
                     
                     
-                    // REPをシリアライズ
-                    std::vector<uint8_t> rep_buf;
+                    // // REPをシリアライズ
+                    // std::vector<uint8_t> rep_buf;
 
-                    // REPを送信(宛先は一つ前の端末に向けて送信)
-                    struct sockaddr_in rep_addr;
-                    rep_addr.sin_family = AF_INET;
-                    rep_addr.sin_port = htons(12345);
-                    std::cout << "Send REP to : " << sender_ip_raw<< std::endl;
-                    std::cout << "Send REP size:" << rep_buf.size() << std::endl; 
-                    rep_addr.sin_addr.s_addr = inet_addr(sender_ip_raw.c_str());
+                    // // REPを送信(宛先は一つ前の端末に向けて送信)
+                    // struct sockaddr_in rep_addr;
+                    // rep_addr.sin_family = AF_INET;
+                    // rep_addr.sin_port = htons(12345);
+                    // std::cout << "Send REP to : " << sender_ip_raw<< std::endl;
+                    // std::cout << "Send REP size:" << rep_buf.size() << std::endl; 
+                    // rep_addr.sin_addr.s_addr = inet_addr(sender_ip_raw.c_str());
 
-                    int rep_sock = socket(AF_INET, SOCK_DGRAM, 0);
-                    if (rep_sock < 0) {
-                        std::cerr << "Failed to create socket for REP" << std::endl;
-                    }
-                    std::cout << "Next ip:" << sender_ip_raw << std::endl;
-                    if (sendto(rep_sock, rep_buf.data(), rep_buf.size(), 0, reinterpret_cast<struct sockaddr*>(&rep_addr), sizeof(rep_addr)) < 0) {
-                        perror("sendto failed for REP");
-                    } else {
-                        std::cout << "---------------------------REP sent successfully to " << sender_ip_raw <<"------------------------------" << std::endl;
+                    // int rep_sock = socket(AF_INET, SOCK_DGRAM, 0);
+                    // if (rep_sock < 0) {
+                    //     std::cerr << "Failed to create socket for REP" << std::endl;
+                    // }
+                    // std::cout << "Next ip:" << sender_ip_raw << std::endl;
+                    // if (sendto(rep_sock, rep_buf.data(), rep_buf.size(), 0, reinterpret_cast<struct sockaddr*>(&rep_addr), sizeof(rep_addr)) < 0) {
+                    //     perror("sendto failed for REP");
+                    // } else {
+                    //     std::cout << "---------------------------REP sent successfully to " << sender_ip_raw <<"------------------------------" << std::endl;
 
-                    }
+                    // }
 
-                    close(rep_sock);
+                    // close(rep_sock);
 
                 } else {
                 //自分宛でないことを確認→forwarding rdpを作成
@@ -1209,9 +1293,7 @@ int main() {
                     std::cerr << "Failed to sign the message" << std::endl;
                     return 1;
                 }
-                // std::cout << "forwarder_signature size:" << forwarder_signature.size() << std::endl;
-                // std::cout << "forwarder_signature size:" <<sizeof(forwarder_signature) << std::endl;
-
+                
                 // 転送端末の証明書を作成
 
                 // 現在時刻の取得
@@ -1344,8 +1426,8 @@ int main() {
                         std::cout << "This message is for me." << std::endl;
                         REP_format rep = {};
                         // REPの作成
-                        //自身の証明書を作成
-                        // 転送端末の証明書を作成
+
+                        // 自身の証明書を作成
                         // 現在時刻の取得
                         std::string Formatted_Time = get_time();
                         // 有効期限の取得
@@ -1377,13 +1459,17 @@ int main() {
                         rep = Makes_REP(deserialized_rdp.rdp.cert.own_ip,own_certificate,deserialized_rdp.rdp.nonce,formatted_Time,deserialized_rdp.rdp.signature);
                         Check_REP(rep);
 
-                        std::cout << "-------------------------------------Destination sends REP-------------------------------------" << std::endl;
-                        
                         // REPをシリアライズ
                         std::vector<uint8_t> rep_buf;
+                        rep_buf = serialize(rep);
+
+                        //reverse_path_Listからひとつ前の端末のIPアドレスを取得
+                        next_ip = get_prev_ip(deserialized_rdp.rdp.dest_ip,deserialized_rdp.rdp.nonce);
+
+                        std::cout << "--------------------------REP send to:" << next_ip << "--------------------------------------" << std::endl;
 
                         // REPを送信(宛先は一つ前の端末に向けて送信) 後々関数化する
-                        unicast_send_process(send_buf, next_ip);
+                        unicast_send_process(rep_buf, next_ip);
 
                     } else {
 
